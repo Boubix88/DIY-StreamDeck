@@ -260,6 +260,20 @@ void startScreen() {
     tft.setTextSize(2);
     tft.setTextColor(GC9A01A_WHITE);
     tft.println("Connection ..."); // Afficher connecion ...
+
+    value.r = 0, value.g = 0, value.b = 0;
+    for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
+      LED.set_crgb_at(i, value);
+      LED.sync();
+    }
+    value.b = 255;
+
+    // Chargement led bleue
+    for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
+      LED.set_crgb_at(i, value);
+      LED.sync();
+      delay(100);
+    }
 }
 
 uint8_t fillArc(uint8_t x, uint8_t y, uint8_t start_angle, uint8_t seg_count, uint8_t rx, uint8_t ry, uint8_t w, uint8_t colour){
@@ -337,7 +351,7 @@ void displayTemp(uint8_t cpuTemp, uint8_t gpuTemp) {
     tft.fillRect(130, 145, 80, 80, GC9A01A_BLACK);
 
     // Afficher l'icône de CPU en haut
-    //tft.drawXBitmap(50, 50, icon_cpu, icon_cpu_width, icon_cpu_height, GC9A01A_WHITE);
+    tft.drawXBitmap(50, 50, icon_cpu, icon_cpu_width, icon_cpu_height, GC9A01A_WHITE);
 
     tft.setTextSize(5);
     tft.setTextColor(GC9A01A_WHITE);
@@ -346,7 +360,7 @@ void displayTemp(uint8_t cpuTemp, uint8_t gpuTemp) {
     tft.println(cpuTemp); // Afficher la temperature cpu
 
     // Afficher l'icône de CPU en haut
-    //tft.drawXBitmap(50, 130, icon_gpu, icon_gpu_width, icon_gpu_height, GC9A01A_WHITE);
+    tft.drawXBitmap(50, 130, icon_gpu, icon_gpu_width, icon_gpu_height, GC9A01A_WHITE);
 
     tft.setCursor(130, 145);
     tft.println(gpuTemp); // Afficher la temperature gpu
@@ -377,14 +391,14 @@ void processReceivedData() {
 
   // Vérifie si le port série est prêt à être écrit
   if (Serial.availableForWrite()) {
-    Serial.print(F("Arduino : "));
+    /*Serial.print(F("Arduino : "));
     Serial.print(seconde);
     Serial.print(F(" <= "));
     Serial.print(resetInterval);
     Serial.print(F("  ---  ecran : "));
     Serial.print(currentScreen);
     Serial.print(F("   ----   Start : "));
-    Serial.println(start);
+    Serial.println(start);*/
   }
 
 
@@ -401,14 +415,17 @@ void processReceivedData() {
     }
 
     // Vérification du type de données reçu
-    if (jsonDocument.containsKey("volume") || (currentScreen == 'v'/* && milliS != -1*/)) {
+    uint8_t volume = jsonDocument["volume"];
+    if (/*jsonDocument.containsKey("volume") || */(currentScreen == 'v'/* && milliS != -1*/) || lastVolume != volume) {
       // On réactive le chrono
       if (start == 0 || start == tmpStart) {
         start = millis();
       } else if (seconde > resetInterval) { // Si les 3s sont ecoulées alors on réinitialise millis
         //milliS = -1;
         start = millis();
-        currentScreen = '?';
+        currentScreen = 'c';
+      } else {
+        currentScreen = 'v';
       }
 
       if (lastScreen == 't' || lastScreen == 'c') {
@@ -416,12 +433,10 @@ void processReceivedData() {
         tft.fillScreen(GC9A01A_BLACK);
       }
 
-      currentScreen = 'v';
-
       //previousMillis = currentMillis;  // Sauvegarde le temps actuel
 
       // Si le JSON contient la clé "volume", on récupère la valeur du volume
-      uint8_t volume = jsonDocument["volume"];
+      volume = jsonDocument["volume"];
       lastVolume = volume;
       displayVolume(volume);
       lastScreen = 'v';
@@ -436,19 +451,31 @@ void processReceivedData() {
       uint8_t gpuTemp = jsonDocument["temperature"]["gpu"];
       displayTemp(cpuTemp, gpuTemp);
       lastScreen = 't';
-    } else if (jsonDocument.containsKey("color")) {
+    }
+    
+    // Gestion de la couleur du ruban
+    if (jsonDocument.containsKey("color")) {
+      mode = jsonDocument["color"]["Mode"];
       // on verifie le type du RGB
-      if (jsonDocument["color"]["Mode"] == 2 || (uint8_t) jsonDocument["color"]["Mode"] == 3){
-        mode = jsonDocument["color"]["Mode"];
-        speed = jsonDocument["color"]["Speed"];
-      } else if (jsonDocument["color"]["Mode"] == 1) {
-        uint8_t r = jsonDocument["color"]["R"];
-        uint8_t g = jsonDocument["color"]["G"];
-        uint8_t b = jsonDocument["color"]["B"];
+      switch ((uint8_t) jsonDocument["color"]["Mode"]) {
+        case 1: // Statique
+          uint8_t r = jsonDocument["color"]["R"];
+          uint8_t g = jsonDocument["color"]["G"];
+          uint8_t b = jsonDocument["color"]["B"];
 
-        setStaticLedColor(r, g, b); // la luminosité est gerée avant l'envoi
+          setStaticLedColor(r, g, b); // la luminosité est gerée avant l'envoi
+          break;
+
+        case 2: // Défilement statique
+          uint8_t speed = jsonDocument["color"]["Speed"];
+          rainbow(speed);
+          break;
+
+        case 3: // Défilement RGB
+          speed = jsonDocument["color"]["Speed"];
+          rainbowCycle(speed);
+          break;
       }
-      
     }
   } else {
     if (lastScreen != 'c') {

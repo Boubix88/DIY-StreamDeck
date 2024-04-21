@@ -33,10 +33,12 @@ def connectToArduino():
     ser = serial.Serial(port, 2000000)  # Remplacez 'COMX' par le port COM utilisé par votre Arduino
     return ser
 
+
 # Ferme la connexion à l'Arduino
 def closeConnection():
     global ser
     ser.close()
+
 
 # Envoi la température à l'Arduino
 def getTemp(cpu_temp_label, gpu_temp_label):
@@ -47,10 +49,7 @@ def getTemp(cpu_temp_label, gpu_temp_label):
     c.Open()
 
     # On envoie la température à l'Arduino en json
-    #temp_json = '{"cpu":' + str(c.Hardware[0].Sensors[7].get_Value()) + ', "gpu":' + str(c.Hardware[1].Sensors[8].get_Value()) + '}'
     temp_json = {"cpu" : str(c.Hardware[0].Sensors[7].get_Value()), "gpu": str(c.Hardware[1].Sensors[8].get_Value())}
-    #ser.write((temp_json + '\n').encode())
-    #print("Température:", temp_json)
 
     # On ecrit la température dans les labels
     cpu_temp_label.configure(text=str(c.Hardware[0].Sensors[7].get_Value()) + " °C")
@@ -76,39 +75,9 @@ def get_system_volume():
 
 # Envoie le volume à l'Arduino
 def getVolume():
-    global ser
-    global old_volume
+    current_volume = ceil(get_system_volume())
+    return str(current_volume)
 
-    # On envoie le volume à l'Arduino
-    if (ceil(get_system_volume()) != old_volume):
-        old_volume = ceil(get_system_volume())
-
-        current_volume = ceil(get_system_volume())
-
-        # On envoie le volume à l'Arduino en json
-        #vol_json = '{"volume":' + str(current_volume) + '}'
-        vol_json = {"volume": str(current_volume)}
-        #ser.write((vol_json + '\n').encode())
-        #print("Volume:", vol_json)
-        return str(current_volume)
-    
-    return 0
-
-    # On met un delai de 100ms
-    #sleep(0.1)
-
-# Envoie de la couleur à l'Arduino
-def getColor(color):
-    global ser
-
-    # On envoie la couleur à l'Arduino en json
-    color_json = '{"color":' + str(color) + '}'
-    #ser.write((color_json + '\n').encode())
-    #print("Couleur:", color_json)
-    return color_json
-
-    # On met un delai de 100ms
-    #sleep(0.1)
 
 # Envoie les données à l'Arduino
 def sendToArduino(temp, vol, color):
@@ -128,8 +97,6 @@ def sendToArduino(temp, vol, color):
     ser.write((json_data + '\n').encode())
     print("Données:", json_data)
 
-    # On met un delai de 100ms
-    #sleep(0.1)
 
 # Affiche ce que l'Arduino envoie sur le port série
 def readSerial():
