@@ -8,7 +8,6 @@
 #include <ArduinoJson.h>
 #include <ArduinoJson.hpp>
 #include <WS2812.h>
-#include "protothreads.h"
 
 #define BOUTON_PLAY 2
 #define BOUTON_PREVIOUS 3
@@ -233,46 +232,60 @@ const unsigned char volume_icon[] PROGMEM = {
    0x00, 0x00, 0x00, 0x00 };
 
 
-Adafruit_GC9A01A tft = Adafruit_GC9A01A(TFT_CS, TFT_DC, TFT_RST);
 
-pt modeThread;
-pt mainThread;
+Adafruit_GC9A01A tft = Adafruit_GC9A01A(TFT_CS, TFT_DC, TFT_RST);
 
 char lastScreen = 'c';
 char currentScreen = '?';
-uint8_t mode = 0;
-uint8_t speed = 20;
 
 // Variables pour le chrono
 unsigned long MS; 
 unsigned long start;
 unsigned long tmpStart;
-const long resetInterval = 3;  // Intervalle de temps pour réinitialiser le timer
+const long resetInterval = 4;  // Intervalle de temps pour réinitialiser le timer
 
 uint8_t lastVolume = 0;
+uint8_t lastCpuTemp = 0;
+uint8_t lastGpuTemp = 0;
+
+uint8_t indexLed = 0;
+uint8_t iterationDispVol = 0;
 
 //Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NB_LED,PIN_LED, NEO_GRB + NEO_KHZ800);
 WS2812 LED(NB_LED); // 14 LEDs
 cRGB value;
 
 void startScreen() {
+    // On remet toutes les anciennes valeurs à 0 pour pas que l'affichage bug
+    lastVolume = 0;
+    lastCpuTemp = 0;
+    lastGpuTemp = 0; 
+    iterationDispVol = 0;
+
     tft.setCursor(40, 115);
     tft.setTextSize(2);
     tft.setTextColor(GC9A01A_WHITE);
     tft.println("Connection ..."); // Afficher connecion ...
 
     value.r = 0, value.g = 0, value.b = 0;
-    for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
+    for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds pour les éteindre
       LED.set_crgb_at(i, value);
       LED.sync();
     }
-    value.b = 255;
 
     // Chargement led bleue
     for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
-      LED.set_crgb_at(i, value);
-      LED.sync();
-      delay(100);
+      if (Serial.available() > 0) { // Si on detecte une connexion au PC
+        return;
+      } else {
+        for (uint8_t j = 0; j < 255; j++) {
+          value.b = j;
+          LED.set_crgb_at(i, value);
+          LED.sync();
+          delay(1);
+        }
+        delay(1);
+      }
     }
 }
 
@@ -290,7 +303,6 @@ uint8_t fillArc(uint8_t x, uint8_t y, uint8_t start_angle, uint8_t seg_count, ui
 
   // Draw colour blocks every inc degrees
   for (uint8_t i = start_angle; i < start_angle + seg * seg_count; i += inc) {
-
     // Calculate pair of coordinates for segment end
     float sx2 = cos((i + seg - 90) * DEG2RAD);
     float sy2 = sin((i + seg - 90) * DEG2RAD);
@@ -310,6 +322,8 @@ uint8_t fillArc(uint8_t x, uint8_t y, uint8_t start_angle, uint8_t seg_count, ui
   }
 }
 
+
+// TODO : Si le volume augmente ne déssiner que la partie de l'arc en plus à rajouter, ne rien effacer, si le volume baisse dessiner en noir la partie de l'arc à retirer
 void displayVolume(uint8_t receivedVolume){
     // Calcul de l'angle pour représenter le volume
     uint8_t volumeAngle = (uint8_t) map(receivedVolume, 0, 100, 0, 360); // Volume en pourcentage vers angle en degre
@@ -317,39 +331,54 @@ void displayVolume(uint8_t receivedVolume){
     /*Serial.print("Angle : ");
     Serial.println(volumeAngle);*/
 
-    tft.fillScreen(GC9A01A_BLACK);
-
     // Centre du cercle
     uint8_t centerX = tft.width() / 2;
     uint8_t centerY = tft.height() / 2;
 
-    uint8_t start_angle = 0;
-    uint8_t r = 110;
-
-    // On dessine l'arc pour le volume du son
-    for (uint8_t n = 0; n < 1; n++) {
-      fillArc(centerX, centerY, 0, volumeAngle/3, centerX-n*20, centerY-n*20, 20, GC9A01A_BLUE);
+    // Si le volume de base est à 0 OU on est si on entre pour la première fois dans la fonction
+    if (lastVolume == 0 || iterationDispVol == 0) {
+      // On dessine l'arc pour le volume du son
+      tft.fillScreen(GC9A01A_BLACK);
+      fillArc(centerX, centerY, 0, volumeAngle/3, centerX, centerY, 20, GC9A01A_BLUE);
     }
 
-    // Afficher l'icône de volume au milieu de l'écran
-    //tft.drawXBitmap(70, 30, volume_icon, volume_icon_width, volume_icon_height, GC9A01A_WHITE);
+    // on affiche seulement si le volume est différent de la dernière fois
+    if (lastVolume != receivedVolume && lastVolume != 0) {
+      // Calculer la différence entre le volume actuel et le volume reçu
+      int8_t volumeDifference = receivedVolume - lastVolume;
 
-    // Afficher le texte du volume en dessous de l'icône
-    tft.fillRect(70, 150, 90, 60, GC9A01A_BLACK);
-    if (receivedVolume >=0 && receivedVolume < 10) {
-      tft.setCursor(100, 150);
-    } else {
-      tft.setCursor(70, 150);
+      // Si le volume augmente, ajoutez une partie de l'arc
+      if (volumeDifference > 0) {
+          // Dessinez l'arc supplémentaire
+          uint8_t newVolumeAngle = (uint8_t) map(volumeDifference, 0, 100, 0, 360); // Volume en pourcentage vers angle en degre
+          fillArc(centerX, centerY, volumeAngle, newVolumeAngle / 3, centerX, centerY, 20, GC9A01A_BLUE);
+      }
+      // Si le volume diminue, effacez une partie de l'arc en noir
+      else if (volumeDifference < 0) {
+          // Effacer l'arc avec la couleur de fond
+          uint8_t newVolumeAngle = (uint8_t) map(-volumeDifference, 0, 100, 0, 360); // Volume en pourcentage vers angle en degre
+          fillArc(centerX, centerY, volumeAngle - newVolumeAngle, newVolumeAngle / 3, centerX, centerY, 20, GC9A01A_BLACK);
+      }
+
+      // Afficher l'icône de volume au milieu de l'écran
+      //tft.drawXBitmap(70, 30, volume_icon, volume_icon_width, volume_icon_height, GC9A01A_WHITE);
+
+      // Afficher le texte du volume en dessous de l'icône
+      tft.fillRect(70, 150, 90, 60, GC9A01A_BLACK);
+      if (receivedVolume >=0 && receivedVolume < 10) {
+        tft.setCursor(100, 150);
+      } else {
+        tft.setCursor(70, 150);
+      }
+      tft.setTextSize(8);
+      tft.setTextColor(GC9A01A_WHITE);
+      tft.println(receivedVolume); // Afficher le volume
     }
-    tft.setTextSize(8);
-    tft.setTextColor(GC9A01A_WHITE);
-    tft.println(receivedVolume); // Afficher le volume
+
+    iterationDispVol++;
 }
 
 void displayTemp(uint8_t cpuTemp, uint8_t gpuTemp) {
-    tft.fillRect(130, 60, 80, 80, GC9A01A_BLACK);
-    tft.fillRect(130, 145, 80, 80, GC9A01A_BLACK);
-
     // Afficher l'icône de CPU en haut
     tft.drawXBitmap(50, 50, icon_cpu, icon_cpu_width, icon_cpu_height, GC9A01A_WHITE);
 
@@ -357,13 +386,19 @@ void displayTemp(uint8_t cpuTemp, uint8_t gpuTemp) {
     tft.setTextColor(GC9A01A_WHITE);
 
     tft.setCursor(130, 60);
-    tft.println(cpuTemp); // Afficher la temperature cpu
-
-    // Afficher l'icône de CPU en haut
+    if (cpuTemp != lastCpuTemp) {
+      tft.fillRect(130, 60, 80, 80, GC9A01A_BLACK);
+      tft.println(cpuTemp); // Afficher la temperature cpu
+    }
+    
+    // Afficher l'icône de GPU en bas
     tft.drawXBitmap(50, 130, icon_gpu, icon_gpu_width, icon_gpu_height, GC9A01A_WHITE);
 
     tft.setCursor(130, 145);
-    tft.println(gpuTemp); // Afficher la temperature gpu
+    if (gpuTemp != lastGpuTemp){
+      tft.fillRect(130, 145, 80, 80, GC9A01A_BLACK);
+      tft.println(gpuTemp); // Afficher la temperature gpu
+    } 
 }
 
 void setStaticLedColor(uint8_t r, uint8_t g, uint8_t b) {
@@ -376,115 +411,17 @@ void setStaticLedColor(uint8_t r, uint8_t g, uint8_t b) {
     LED.sync();
 }
 
-void processReceivedData() {
-  // Obtient le temps actuel
-  MS = millis()-start;
+void rainbow(uint8_t wait) {
+  //Serial.println("Rainbow");
 
-  /*Serial.print(F("Arduino : "));
-  Serial.print((MS / 1000) / 60);
-  Serial.print(F(" : "));
-  Serial.print((MS / 1000) % 60);
-  Serial.print(F(" : "));
-  Serial.println(MS % 1000);*/
-
-  uint8_t seconde = (MS / 1000) % 60;;
-
-  // Vérifie si le port série est prêt à être écrit
-  if (Serial.availableForWrite()) {
-    /*Serial.print(F("Arduino : "));
-    Serial.print(seconde);
-    Serial.print(F(" <= "));
-    Serial.print(resetInterval);
-    Serial.print(F("  ---  ecran : "));
-    Serial.print(currentScreen);
-    Serial.print(F("   ----   Start : "));
-    Serial.println(start);*/
-  }
-
-
-  if (Serial.available() > 0) {
-    // Lecture des données JSON envoyées par le port série
-    StaticJsonDocument<300> jsonDocument;
-    DeserializationError error = deserializeJson(jsonDocument, Serial);
-
-    if (error) {
-      // Gestion des erreurs de lecture JSON
-      /*Serial.print(F("deserializeJson() failed: "));
-      Serial.println(error.c_str());*/
-      return;
+  if (indexLed >= 0 && indexLed < 256) {
+    for (uint8_t i = 0; i < NB_LED; i++) {
+      LED.set_crgb_at(i, Wheel((i + indexLed) & 255));
     }
-
-    // Vérification du type de données reçu
-    uint8_t volume = jsonDocument["volume"];
-    if (/*jsonDocument.containsKey("volume") || */(currentScreen == 'v'/* && milliS != -1*/) || lastVolume != volume) {
-      // On réactive le chrono
-      if (start == 0 || start == tmpStart) {
-        start = millis();
-      } else if (seconde > resetInterval) { // Si les 3s sont ecoulées alors on réinitialise millis
-        //milliS = -1;
-        start = millis();
-        currentScreen = 'c';
-      } else {
-        currentScreen = 'v';
-      }
-
-      if (lastScreen == 't' || lastScreen == 'c') {
-        // Effacer l'écran précédent
-        tft.fillScreen(GC9A01A_BLACK);
-      }
-
-      //previousMillis = currentMillis;  // Sauvegarde le temps actuel
-
-      // Si le JSON contient la clé "volume", on récupère la valeur du volume
-      volume = jsonDocument["volume"];
-      lastVolume = volume;
-      displayVolume(volume);
-      lastScreen = 'v';
-    } else if (jsonDocument.containsKey("temperature")/*jsonDocument.containsKey("cpu") && jsonDocument.containsKey("gpu")*/) {
-      if (lastScreen == 'v' || lastScreen == 'c') {
-        // Effacer l'écran précédent
-        tft.fillScreen(GC9A01A_BLACK);
-      }
-
-      // Si le JSON contient les clés "cpu" et "gpu", on récupère les valeurs de température CPU et GPU
-      uint8_t cpuTemp = jsonDocument["temperature"]["cpu"];
-      uint8_t gpuTemp = jsonDocument["temperature"]["gpu"];
-      displayTemp(cpuTemp, gpuTemp);
-      lastScreen = 't';
-    }
-    
-    // Gestion de la couleur du ruban
-    if (jsonDocument.containsKey("color")) {
-      mode = jsonDocument["color"]["Mode"];
-      // on verifie le type du RGB
-      switch ((uint8_t) jsonDocument["color"]["Mode"]) {
-        case 1: // Statique
-          uint8_t r = jsonDocument["color"]["R"];
-          uint8_t g = jsonDocument["color"]["G"];
-          uint8_t b = jsonDocument["color"]["B"];
-
-          setStaticLedColor(r, g, b); // la luminosité est gerée avant l'envoi
-          break;
-
-        case 2: // Défilement statique
-          uint8_t speed = jsonDocument["color"]["Speed"];
-          rainbow(speed);
-          break;
-
-        case 3: // Défilement RGB
-          speed = jsonDocument["color"]["Speed"];
-          rainbowCycle(speed);
-          break;
-      }
-    }
-  } else {
-    if (lastScreen != 'c') {
-      // Effacer l'écran précédent
-      tft.fillScreen(GC9A01A_BLACK);
-    }
-
-    startScreen();
-    lastScreen = 'c';
+    LED.sync();
+    indexLed += wait/10;
+  } else if (indexLed >= 256) {
+    indexLed = 0;
   }
 }
 
@@ -510,98 +447,136 @@ cRGB Wheel(byte WheelPos) {
   return color;
 }
 
-void rainbow(uint8_t wait) {
-  uint16_t i, j;
-  //Serial.println("Rainbow");
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < NB_LED; i++) {
-      LED.set_crgb_at(i, Wheel((i + j) & 255));
-    }
-    LED.sync();
-    delay(wait);
-  }
-}
-
 void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
   //Serial.println("Rainbow cycle");
 
-  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
-    for(i=0; i< NB_LED; i++) {
-      LED.set_crgb_at(i, Wheel(((i * 256 / NB_LED) + j) & 255));
+  if (indexLed >= 0 && indexLed < 256*5) { // 5 cycles of all colors on wheel
+    for(uint8_t i=0; i< NB_LED; i++) {
+      LED.set_crgb_at(i, Wheel(((i * 256 / NB_LED) + indexLed) & 255));
     }
     LED.sync();
-    delay(wait);
+    indexLed += wait/10;
+  } else if (indexLed >= 256*5) {
+    indexLed = 0;
   }
 }
 
+void processReceivedData() {
+  // Obtient le temps actuel
+  MS = millis()-start;
 
-int handleMode(/*struct pt *pt*/) {
-  //PT_BEGIN(pt);
+  /*Serial.print(F("Arduino : "));
+  Serial.print((MS / 1000) / 60);
+  Serial.print(F(" : "));
+  Serial.print((MS / 1000) % 60);
+  Serial.print(F(" : "));
+  Serial.println(MS % 1000);*/
 
-  //while(1) {
-    switch (mode) {
-      case 2: // Défilement par led
-       uint16_t i, j;
-      //Serial.println("Rainbow cycle");
+  uint8_t seconde = (MS / 1000) % 60;;
 
-      for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
-        for(i=0; i< NB_LED; i++) {
-          LED.set_crgb_at(i, Wheel(((i * 256 / NB_LED) + j) & 255));
-        }
-        LED.sync();
-        //delay(speed);
-        //PT_YIELD(pt);
+  // Vérifie si le port série est prêt à être écrit
+  if (Serial.availableForWrite()) {
+    /*Serial.print(F("Arduino : "));
+    Serial.print(seconde);
+    Serial.print(F(" <= "));
+    Serial.print(resetInterval);
+    Serial.print(F("  ---  ecran : "));
+    Serial.print(currentScreen);
+    Serial.print(F("   ----   Start : "));
+    Serial.println(start);*/
+    /*Serial.print(F("Index LED : "));
+    Serial.println(indexLed);*/
+  }
+
+
+  if (Serial.available() > 0) {
+    // Lecture des données JSON envoyées par le port série
+    StaticJsonDocument<300> jsonDocument;
+    DeserializationError error = deserializeJson(jsonDocument, Serial);
+
+    if (error) {
+      // Gestion des erreurs de lecture JSON
+      /*Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.c_str());*/
+      return;
+    }
+
+    // Vérification du type de données reçu
+    uint8_t volume = jsonDocument["volume"];
+    if (/*jsonDocument.containsKey("volume") || */(currentScreen == 'v'/* && milliS != -1*/) || lastVolume != volume) {
+      lastCpuTemp = 0;
+      lastGpuTemp = 0; 
+    
+      // On réactive le chrono
+      if (start == 0 || start == tmpStart) {
+        start = millis();
+      } else if (seconde > resetInterval) { // Si les 3s sont ecoulées alors on réinitialise millis
+        //milliS = -1;
+        start = millis();
+        currentScreen = 'c';
+      } else {
+        currentScreen = 'v';
       }
-        break;
 
-      case 3: // Défilement Statique
-        for (j = 0; j < 256; j++) {
-          for (i = 0; i < NB_LED; i++) {
-            LED.set_crgb_at(i, Wheel((i + j) & 255));
-          }
-          LED.sync();
-          //delay(speed);
-          //PT_YIELD(pt);
-        }
-        break;
+      if (lastScreen == 't' || lastScreen == 'c') {
+        // Effacer l'écran précédent
+        tft.fillScreen(GC9A01A_BLACK);
+      }
 
-      default: // Default
-        //setStaticLedColor(0, 0, 255);
-        //PT_YIELD(pt);
-        break;
+      //previousMillis = currentMillis;  // Sauvegarde le temps actuel
+
+      // Si le JSON contient la clé "volume", on récupère la valeur du volume
+      volume = jsonDocument["volume"];
+      displayVolume(volume);
+      lastVolume = volume;
+      lastScreen = 'v';
+    } else if (jsonDocument.containsKey("temperature")/*jsonDocument.containsKey("cpu") && jsonDocument.containsKey("gpu")*/) {
+      iterationDispVol = 0;
+
+      if (lastScreen == 'v' || lastScreen == 'c') {
+        // Effacer l'écran précédent
+        tft.fillScreen(GC9A01A_BLACK);
+      }
+
+      // Si le JSON contient les clés "cpu" et "gpu", on récupère les valeurs de température CPU et GPU
+      uint8_t cpuTemp = jsonDocument["temperature"]["cpu"];
+      uint8_t gpuTemp = jsonDocument["temperature"]["gpu"];
+      displayTemp(cpuTemp, gpuTemp);
+      lastScreen = 't';
+      lastCpuTemp = cpuTemp;
+      lastGpuTemp = gpuTemp;
     }
-    //PT_YIELD(pt);
-  //}
+    
+    // Gestion de la couleur du ruban
+    if (jsonDocument.containsKey("color")) {
+      // on verifie le type du RGB
+      uint8_t mode = jsonDocument["color"]["Mode"];
 
-  //PT_END(pt);
-}
+      if (mode == 1) { // Mode statique
+        uint8_t brightness = jsonDocument["color"]["Brightness"];
+        uint8_t r = (uint8_t) jsonDocument["color"]["R"] * (brightness / 100.0);
+        uint8_t g = (uint8_t) jsonDocument["color"]["G"] * (brightness / 100.0);
+        uint8_t b = (uint8_t) jsonDocument["color"]["B"] * (brightness / 100.0);
 
-
-int handleMain(/*struct pt *pt*/) {
-  //PT_BEGIN(pt);
-
-  //while(1) {
-    // Bouton PLAY/PAUSE
-    if (digitalRead(BOUTON_PLAY) == LOW) {
-      //Serial.println("Play/Pause");
-
-      // On envoi la commande
-      Consumer.write(MEDIA_PLAY_PAUSE);
-
-      delay(200);
+        setStaticLedColor(r, g, b);
+      } else if (mode == 2) { // Défilement statique
+        uint8_t speed = jsonDocument["color"]["Speed"];
+        rainbow(speed);
+      } else if (mode == 3) { // Défilement RGB
+        uint8_t speed = jsonDocument["color"]["Speed"];
+        rainbowCycle(speed);
+      }
+    }
+  } else {
+    if (lastScreen != 'c') {
+      // Effacer l'écran précédent
+      tft.fillScreen(GC9A01A_BLACK);
     }
 
-    // On recoit des données donc on affiche le volume
-    processReceivedData();
-
-    //PT_YIELD(pt);
-  //}
-
-  //PT_END(pt);
+    startScreen();
+    lastScreen = 'c';
+  }
 }
-
 
 void setup() {
   // Initialisation du bouton 1
@@ -616,52 +591,32 @@ void setup() {
   // Initialisation des leds
   LED.setOutput(PIN_LED);
   LED.setColorOrderGRB();
-
   value.r = 0, value.g = 0, value.b = 0;
-  for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
-    LED.set_crgb_at(i, value);
-    LED.sync();
-  }
-  value.b = 255;
-  
-  // Chargement led bleue
-  for(uint8_t i=0; i<NB_LED; i++){ // On parcour toute les leds
-    LED.set_crgb_at(i, value);
-    LED.sync();
-    delay(100);
-  }
   
   // On initialise l'ecran
   tft.begin();
-
-  //Serial.print(F("Starting ..."));
   tft.fillScreen(GC9A01A_BLACK);
-  startScreen();
-  delay(500);
-
-  // Initialisez la structure pt
-  /*PT_INIT(&modeThread);
-  PT_INIT(&mainThread);*/
   
   // Attente de la connexion au port série
   while (!Serial) {
-    ;
+    startScreen();
   }
 
   start = 0;
   tmpStart = start;
-
-  //Serial.println(F("Done!"));
-
 }
 
 void loop() {
-  //PT_SCHEDULE(handleMain(&mainThread));
+  // Bouton PLAY/PAUSE
+  if (digitalRead(BOUTON_PLAY) == LOW) {
+    //Serial.println("Play/Pause");
 
-  handleMain();
-  handleMode();
+    // On envoi la commande
+    Consumer.write(MEDIA_PLAY_PAUSE);
 
-  // Transformer la boucle pour qu'elle se fasse par rapport à la boucle 
-  //PT_SCHEDULE(handleMode(&modeThread)); // Remplacez modeValue et speedValue par vos valeurs réelles
+    delay(200);
+  }
 
+  // On recoit des données donc on affiche le volume
+  processReceivedData();
 }

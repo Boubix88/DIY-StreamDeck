@@ -5,13 +5,14 @@ import StreamDeck as sd
 import threading
 from time import sleep
 import fileManger as file
+import System
 
-# Initialisation des variables globales pour les valeurs RVB et la luminosité
-brightness = 100  # Luminosité initiale
 
-# On charge le json
+# Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
 colorData = file.load_json("data.json")
 rgb_values = [colorData["R"], colorData["G"], colorData["B"]] # Valeurs RVB initiales (bleu par défaut)
+brightness = colorData["Brightness"]  # Luminosité initiale
+color_speed = colorData["Speed"]  # Vitesse de défilement RGB initiale
 
 # Fonction pour convertir les valeurs RVB en format hexadécimal
 def rgb_to_hex(r, g, b):
@@ -48,7 +49,7 @@ def set_brightness(value, var):
 # Envoi des valeurs RVB et de luminosité à l'Arduino
 def apply_changes():
     global ser, rgb_values, brightness, colorData
-    colorData = {"Mode" : 1, "R": int(rgb_values[0] * (brightness / 100)), "G": int(rgb_values[1] * (brightness / 100)), "B": int(rgb_values[2] * (brightness / 100))}
+    colorData = {"Mode" : 1, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]),"Brightness": brightness, "Speed": 20}
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -56,7 +57,7 @@ def update_static_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     static_speed_var.set(int(value))
-    colorData = {"Mode" : 2, "R": int(rgb_values[0] * (brightness / 100)), "G": int(rgb_values[1] * (brightness / 100)), "B": int(rgb_values[2] * (brightness / 100)), "Speed": int(value)}
+    colorData = {"Mode" : 2, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Brightness": brightness, "Speed": int(value)}
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -64,7 +65,7 @@ def update_scroll_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     scroll_speed_var.set(int(value))
-    colorData = {"Mode" : 3, "R": int(rgb_values[0] * (brightness / 100)), "G": int(rgb_values[1] * (brightness / 100)), "B": int(rgb_values[2] * (brightness / 100)), "Speed": int(value)}
+    colorData = {"Mode" : 3, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Brightness": brightness, "Speed": int(value)}
     file.save_json(colorData, "data.json")
 
 def on_close():
@@ -74,7 +75,7 @@ def on_close():
     try:
         sd.closeConnection()
         pass
-    except OSError:
+    except (OSError, System.NullReferenceException, System.AccessViolationException):  # Fix: Replace "NullReferenceError" with "ReferenceError"
         print("Erreur lors de la fermeture de la caonnexion.")
         pass
 
@@ -102,11 +103,11 @@ scroll_speed_label = customtkinter.CTkLabel(scrolling_rgb_tab, text="Vitesse")  
 scroll_speed_label.grid(row=4, column=0, padx=10, pady=5)
 
 scroll_speed_slider = CTkSlider(scrolling_rgb_tab, from_=0, to=100, number_of_steps=5, command=update_scroll_speed)
-scroll_speed_slider.set(50)  # Valeur par défaut
+scroll_speed_slider.set(color_speed)  # Valeur par défaut
 scroll_speed_slider.grid(row=4, column=1, columnspan=2, padx=10, pady=5)
 
 scroll_speed_var = customtkinter.IntVar()  # Variable pour la valeur du slider de luminosité
-scroll_speed_var.set(20)  # Initialisation à 0
+scroll_speed_var.set(color_speed)  # Initialisation à 0
 scroll_speed_value_label = customtkinter.CTkLabel(scrolling_rgb_tab, textvariable=scroll_speed_var)  # Étiquette pour la valeur du defilement RGB
 scroll_speed_value_label.grid(row=4, column=3, padx=5, pady=5)
 
@@ -116,11 +117,11 @@ static_speed_label = customtkinter.CTkLabel(static_rgb_tab, text="Vitesse")  # L
 static_speed_label.grid(row=4, column=0, padx=10, pady=5)
 
 static_speed_slider = CTkSlider(static_rgb_tab, from_=0, to=100, number_of_steps=5, command=update_static_speed)
-static_speed_slider.set(30)  # Valeur par défaut
+static_speed_slider.set(color_speed)  # Valeur par défaut
 static_speed_slider.grid(row=4, column=1, columnspan=2, padx=10, pady=5)
 
 static_speed_var = customtkinter.IntVar()  # Variable pour la valeur du slider de luminosité
-static_speed_var.set(20)  # Initialisation à 0
+static_speed_var.set(color_speed)  # Initialisation à 0
 static_speed_value_label = customtkinter.CTkLabel(static_rgb_tab, textvariable=static_speed_var)  # Étiquette pour la valeur du defilement RGB
 static_speed_value_label.grid(row=4, column=3, padx=5, pady=5)
 
@@ -159,9 +160,9 @@ brightness_label = customtkinter.CTkLabel(fixed_color_tab, text="Luminosité")  
 brightness_label.grid(row=4, column=0, padx=10, pady=5)
 
 brightness_var = customtkinter.IntVar()  # Variable pour la valeur du slider de luminosité
-brightness_var.set(100)  # Initialisation à 0
+brightness_var.set(brightness)  # Initialisation à 0
 brightness_slider = CTkSlider(fixed_color_tab, from_=0, to=100, number_of_steps=100, command=lambda value, var=brightness_var: set_brightness(value, var))
-brightness_slider.set(100)  # Initialisation à 0
+brightness_slider.set(brightness)  # Initialisation à 0
 brightness_slider.grid(row=4, column=1, columnspan=2, padx=10, pady=5)
 
 brightness_value_label = customtkinter.CTkLabel(fixed_color_tab, textvariable=brightness_var)  # Étiquette pour la valeur du slider de luminosité
