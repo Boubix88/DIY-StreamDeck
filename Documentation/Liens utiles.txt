@@ -1,0 +1,8 @@
+-Touches clavies : https://www.arduino.cc/reference/en/language/functions/usb/keyboard/keyboardmodifiers/
+- Arduino media keys : https://uboopenfactory.univ-brest.fr/Les-Labs/MusicLab/Projets/Arduino-Media-Keys
+- GC9A01 demo : https://github.com/carlfriess/GC9A01_demo
+- Autre demo : https://dronebotworkshop.com/gc9a01/
+- WaveShare wiki : https://www.waveshare.com/wiki/1.28inch_LCD_Module#Resources
+- Adafruit demo : https://github.com/adafruit/Adafruit_GC9A01A/blob/main/examples/graphicstest/graphicstest.ino
+- Adafruit librairie : https://adafruit.github.io/Adafruit-GFX-Library/html/class_adafruit___g_f_x.html#aa7797117fef7d18592d352c14fa7d820
+- Arduino bouton : https://gitlab.com/airbornemint/arduino-protothreads/-/blob/main/examples/Button/Button.ino?ref_type=heads

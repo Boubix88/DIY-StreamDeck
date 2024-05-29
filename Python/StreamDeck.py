@@ -1,19 +1,25 @@
 from ctypes import cast, POINTER
+import threading
 from venv import logger
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 import serial
 from math import ceil
-from time import sleep
+import time
 from serial.tools.list_ports import comports
 import clr
 clr.AddReference(r'OpenHardwareMonitorLib') 
 from OpenHardwareMonitor.Hardware import Computer
+from OpenHardwareMonitor.Hardware import SensorType
 import json
             
 # Main
 old_volume = 0
 ser = None
+
+# Variables globales pour stocker les dernières températures lues
+last_cpu_temp = None
+last_gpu_temp = None
 
 # Connexion à l'Arduino
 def connectToArduino():
@@ -23,13 +29,18 @@ def connectToArduino():
     port = None
 
     # On récupère le port série de l'Arduino
-    for port in comports():
-        # Si le nom du port contient Arduino on le sélectionne
-        if "Arduino" in port.description:
-            print("Arduino trouvé au port", port.device)
-            port = port.device
-            break
 
+    try:
+        for port in comports():
+            # Si le nom du port contient Arduino on le sélectionne
+            if "Arduino" in port.description:
+                print("Arduino trouvé au port", port.device)
+                port = port.device
+                break
+    except Exception as e:
+        print("Erreur lors de la recherche du port série:", e)
+        return None
+    
     ser = serial.Serial(port, 2000000)  # Remplacez 'COMX' par le port COM utilisé par votre Arduino
     return ser
 
@@ -37,31 +48,38 @@ def connectToArduino():
 # Ferme la connexion à l'Arduino
 def closeConnection():
     global ser
-    ser.close()
+    if ser != None and ser.is_open:
+        ser.close()
+        print("Connexion fermée.")
 
+# Fonction pour lire les températures à intervalles réguliers
+def read_temps():
+    global last_cpu_temp, last_gpu_temp
+    while True:
+        c = Computer()
+        c.CPUEnabled = True
+        c.GPUEnabled = True
+        c.Open()
+        last_cpu_temp = c.Hardware[0].Sensors[7].get_Value()
+        last_gpu_temp = c.Hardware[1].Sensors[0].get_Value()
+        # On met a jour les valeurs
+        c.Hardware[0].Update()
+        c.Hardware[1].Update()
+        c.Close()
+        time.sleep(1)  # Attendre 5 secondes avant de lire à nouveau
 
 # Envoi la température à l'Arduino
 def getTemp(cpu_temp_label, gpu_temp_label):
-    global ser
-    c = Computer()
-    c.CPUEnabled = True # get the Info about CPU
-    c.GPUEnabled = True # get the Info about GPU
-    c.Open()
+    global last_cpu_temp, last_gpu_temp
 
     # On envoie la température à l'Arduino en json
-    temp_json = {"cpu" : str(c.Hardware[0].Sensors[7].get_Value()), "gpu": str(c.Hardware[1].Sensors[8].get_Value())}
+    temp_json = {"cpu" : str(last_cpu_temp), "gpu": str(last_gpu_temp)}
 
     # On ecrit la température dans les labels
-    cpu_temp_label.configure(text=str(c.Hardware[0].Sensors[7].get_Value()) + " °C")
-    gpu_temp_label.configure(text=str(c.Hardware[1].Sensors[8].get_Value()) + " °C")
-
-    # On met a jour les valeurs
-    c.Hardware[0].Update()
-    c.Hardware[1].Update()
+    cpu_temp_label.configure(text=str(last_cpu_temp) + " °C")
+    gpu_temp_label.configure(text=str(last_gpu_temp) + " °C")
 
     return temp_json
-
-    #sleep(0.5)
 
 
 # On récupère le volume du système
@@ -75,8 +93,8 @@ def get_system_volume():
 
 # Envoie le volume à l'Arduino
 def getVolume():
-    current_volume = ceil(get_system_volume())
-    return str(current_volume)
+    current_volume = get_system_volume()
+    return str(round(current_volume))
 
 
 # Envoie les données à l'Arduino
@@ -94,8 +112,15 @@ def sendToArduino(temp, vol, color):
     json_data = json.dumps(data)
 
     # Envoyer les données à l'Arduino en tant que chaîne encodée
-    ser.write((json_data + '\n').encode())
-    print("Données:", json_data)
+    try:
+        if (ser != None and ser.is_open):
+            ser.write((json_data + '\n').encode())
+        else:
+            print("Le port série n'est pas ouvert.")
+    except (serial.SerialException, None) as e: #plus tard on affichera sur l'interface graphique un message d'erreur
+        print("Erreur lors de l'envoi des données à l'Arduino:", e)
+        pass
+    #print("Données:", json_data)
 
 
 # Affiche ce que l'Arduino envoie sur le port série
@@ -110,3 +135,10 @@ def readSerial():
     except serial.SerialException as e:
         print("Erreur lors de la lecture du port série:", e)
         pass
+
+
+# Démarrer un thread séparé pour lire les températures
+def start_temp_thread():
+    temp_thread = threading.Thread(target=read_temps)
+    temp_thread.daemon = True
+    temp_thread.start()
