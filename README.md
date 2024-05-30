@@ -5,11 +5,11 @@
 
 ![DIY-StreamDeck Logo](https://raw.githubusercontent.com/Boubix88/DIY-StreamDeck/master/Documentation/logo_streamdeck.png)
 
-> ![IMPORTANT] Compilation
+> [!IMPORTANT] Compilation
 > Ne fonctionne que sous Windows
 > python ./app.py
 
-> ![IMPORTANT] .exe
+> [!IMPORTANT] .exe
 > Si première fois : pyinstaller --onefile --windowed --icon="assets/icon.ico" app.py
 > Sinon : pyinstaller app.spec
 
