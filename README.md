@@ -5,6 +5,14 @@
 
 ![DIY-StreamDeck Logo](https://raw.githubusercontent.com/Boubix88/DIY-StreamDeck/master/Documentation/logo_streamdeck.png)
 
+> ![IMPORTANT] Compilation
+> Ne fonctionne que sous Windows
+> python ./app.py
+
+> ![IMPORTANT] .exe
+> Si première fois : pyinstaller --onefile --windowed --icon="assets/icon.ico" app.py
+> Sinon : pyinstaller app.spec
+
 DIY-StreamDeck est un projet de contrôleur de médias personnalisé pour Windows. Il offre une interface matérielle et logicielle pour contrôler le volume, jouer/pauser le son, naviguer entre les pistes précédentes/suivantes et lancer des logiciels.
 
 ## Fonctionnalités

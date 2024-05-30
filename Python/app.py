@@ -92,6 +92,7 @@ def on_close():
 app = customtkinter.CTk()
 app.title('DIY StreamDeck')
 app.geometry("850x450")
+app.iconbitmap("assets/icon.ico")
 
 # Associez la fonction on_close à l'événement de fermeture de la fenêtre
 app.protocol("WM_DELETE_WINDOW", on_close)
