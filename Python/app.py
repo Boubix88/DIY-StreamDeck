@@ -1,9 +1,9 @@
+import StreamDeck as sd
 from io import BytesIO
 import customtkinter
 from customtkinter import CTkSlider
-from tkinter import colorchooser, Canvas, PhotoImage, Menu, filedialog
+from tkinter import colorchooser, Canvas, PhotoImage, Menu, filedialog, messagebox
 from PIL import Image, ImageTk
-import StreamDeck as sd
 import threading
 from time import sleep
 import fileManger as file
@@ -80,7 +80,7 @@ def on_close():
         sd.closeConnection()
         pass
     except (OSError, System.NullReferenceException, System.AccessViolationException):  # Fix: Replace "NullReferenceError" with "ReferenceError"
-        print("Erreur lors de la fermeture de la caonnexion.")
+        print("Erreur lors de la fermeture de la connexion.")
         pass
 
     # Fermez la fenêtre principale
@@ -91,14 +91,14 @@ def on_close():
 # Création de la fenêtre principale
 app = customtkinter.CTk()
 app.title('DIY StreamDeck')
-app.geometry("854x480")
+app.geometry("850x450")
 
 # Associez la fonction on_close à l'événement de fermeture de la fenêtre
 app.protocol("WM_DELETE_WINDOW", on_close)
 
 
 # Création de l'écran d'accueil avec le TabView sur la gauche
-tab_view = customtkinter.CTkTabview(app, width=400, height=310)
+tab_view = customtkinter.CTkTabview(app, width=400, height=250)
 tab_view.place(x=20, y=0)
 
 # Onglet "Defilement RGB"
@@ -176,32 +176,35 @@ slider_vars.append(brightness_var)  # Ajoute la variable à la liste
 
 
 # ========================================= Ajout de la température CPU et GPU ========================================= #
-# Create a frame  
-temp_frame = customtkinter.CTkFrame(master=app, width=400, height=220)  
-temp_frame.place(x=20, y=330)  
+# Create a tab view
+temp_frame = customtkinter.CTkTabview(master=app, width=200, height=150)
+temp_frame.place(x=20, y=270)
+
+# Add the frame to the tab view as a new tab
+tab_frame = temp_frame.add("Températures")
 
 # Ajout de l'icône CPU
 cpu_icon = PhotoImage(file="assets/icon_cpu_py.png")
 cpu_icon = cpu_icon.subsample(3)
-cpu_icon_label = customtkinter.CTkLabel(temp_frame, image=cpu_icon)
+cpu_icon_label = customtkinter.CTkLabel(tab_frame, image=cpu_icon)
 # On cache le texte du label
 cpu_icon_label.configure(text="")
 cpu_icon_label.grid(row=0, column=0, padx=10, pady=5)
 
 # Ajout de l'étiquette pour afficher la température CPU
-cpu_temp_label = customtkinter.CTkLabel(temp_frame, text="", font=("Arial", 20))
+cpu_temp_label = customtkinter.CTkLabel(tab_frame, text="", font=("Arial", 20))
 cpu_temp_label.grid(row=1, column=0, padx=10, pady=5)
 
 # Ajout de l'icône carte graphique
 gpu_icon = PhotoImage(file="assets/icon_gpu_py.png")
 gpu_icon = gpu_icon.subsample(3)
-gpu_icon_label = customtkinter.CTkLabel(temp_frame, image=gpu_icon)
+gpu_icon_label = customtkinter.CTkLabel(tab_frame, image=gpu_icon)
 # On cache le texte du label
 gpu_icon_label.configure(text="")
 gpu_icon_label.grid(row=0, column=1, padx=10, pady=5)
 
 # Ajout de l'étiquette pour afficher la température GPU
-gpu_temp_label = customtkinter.CTkLabel(temp_frame, text="", font=("Arial", 20))
+gpu_temp_label = customtkinter.CTkLabel(tab_frame, text="", font=("Arial", 20))
 gpu_temp_label.grid(row=1, column=1, padx=10, pady=5)
 
 
@@ -428,10 +431,21 @@ def send_data():
     global colorData
 
     while True:
-        temp = sd.getTemp(cpu_temp_label, gpu_temp_label)
-        vol = sd.getVolume()
-        sd.readSerial()
-        sd.sendToArduino(temp, vol, colorData) # On envoie les données à l'Arduino
+        try:
+            temp = sd.getTemp(cpu_temp_label, gpu_temp_label)
+            vol = sd.getVolume()
+            sd.readSerial()
+            sd.sendToArduino(temp, vol, colorData) # On envoie les données à l'Arduino
+        except (OSError):
+            print("Erreur lors de la connexion à l'Arduino.")
+            #messagebox.showinfo("Erreur", "En attente de connexion ...")
+            #show_toast("En attente de connexion ...")x
+            try:
+                sd.connectToArduino()
+                pass
+            except (OSError):
+                print("Erreur lors de la connexion à l'Arduino.")
+                pass
 
         # Ajoutez un délai entre chaque envoi si nécessaire
         # time.sleep(1)
@@ -447,6 +461,7 @@ def main():
     global colorData
 
     try:
+        sd.setTkinter(app)
         sd.connectToArduino()
         pass
     except (OSError):
