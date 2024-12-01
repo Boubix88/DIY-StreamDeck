@@ -256,7 +256,7 @@ tab_frame = tab_spotify.add("Spotify")
 album_label = customtkinter.CTkLabel(master=tab_frame, text="")
 album_label.grid(row=0, column=0, rowspan=3, padx=0, pady=0)
 
-track_label = customtkinter.CTkLabel(master=tab_frame, text="Track: ")
+track_label = customtkinter.CTkLabel(master=tab_frame, text="Track: ", wraplength=200)
 track_label.grid(row=0, column=1, sticky="w")
 
 artist_label = customtkinter.CTkLabel(master=tab_frame, text="Artist: ")
@@ -291,10 +291,7 @@ def update_spotify_info():
             progress_bar.set(progress_percentage)
 
             # Téléchargez et affichez l'image de l'album
-            '''response = requests.get(album_image_url)
-            img_data = response.content'''
             album_image = Image.open(album_image_url)
-            #album_image = album_image.resize((100, 100), Image.Resampling.LANCZOS)
             album_photo = customtkinter.CTkImage(album_image, size=(80, 80))
             album_label.configure(image=album_photo)
             album_label.image = album_photo  # Gardez une référence à l'image pour éviter qu'elle soit garbage collected

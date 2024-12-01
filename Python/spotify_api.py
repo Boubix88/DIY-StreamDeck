@@ -2,11 +2,15 @@ import os
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import requests
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 
 # Remplacez par vos propres informations d'authentification
-CLIENT_ID = '3330b4c4228741eeaf47ba14aed09ff0'
-CLIENT_SECRET = '143609de23a1461da2926ea51ff5f5a3'
-REDIRECT_URI = 'http://localhost:8888/callback'
+CLIENT_ID = os.getenv('CLIENT_ID')
+CLIENT_SECRET = os.getenv('CLIENT_SECRET')
+REDIRECT_URI = os.getenv('REDIRECT_URI')
 
 # Scopes nécessaires pour accéder aux informations de lecture
 scope = 'user-read-playback-state'
