@@ -7,9 +7,11 @@ import serial
 from math import ceil
 import time
 from serial.tools.list_ports import comports
+import pythonnet
+pythonnet.load()
 import clr
+clr.AddReference('OpenHardwareMonitorLib')
 import customtkinter
-clr.AddReference(r'OpenHardwareMonitorLib') 
 from OpenHardwareMonitor.Hardware import Computer
 from OpenHardwareMonitor.Hardware import SensorType
 import json
@@ -69,6 +71,8 @@ def connectToArduino():
         return None
     
     try:
+        if ser and ser.is_open:
+            ser.close()
         ser = serial.Serial(port, 2000000)
     except serial.SerialException as e:
         print("Erreur lors de l'ouverture du port série:", e)

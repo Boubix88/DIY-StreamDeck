@@ -10,6 +10,9 @@ import fileManger as file
 import System
 import subprocess
 import os
+from spotify_api import get_current_playback  # Remplacez par le nom de votre fonction
+import requests
+import time
 
 
 # Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
@@ -242,6 +245,65 @@ def combine_images(background_path, overlay_path, overlay_size=(32, 32)):
 
     return combined_photo_image
 
+# ========================================= Afficher les infos Spotify ========================================= #
+# Créez une tab view
+tab_spotify = customtkinter.CTkTabview(master=app, width=300, height=150)
+tab_spotify.place(x=240, y=270)
+
+tab_frame = tab_spotify.add("Spotify")
+
+# Créez les labels pour afficher les informations Spotify
+album_label = customtkinter.CTkLabel(master=tab_frame, text="")
+album_label.grid(row=0, column=0, rowspan=3, padx=0, pady=0)
+
+track_label = customtkinter.CTkLabel(master=tab_frame, text="Track: ")
+track_label.grid(row=0, column=1, sticky="w")
+
+artist_label = customtkinter.CTkLabel(master=tab_frame, text="Artist: ")
+artist_label.grid(row=1, column=1, sticky="w")
+
+progress_label = customtkinter.CTkLabel(master=tab_frame, text="Progress: ")
+progress_label.grid(row=2, column=1, sticky="w")
+
+# Créez une barre de progression
+progress_bar = customtkinter.CTkProgressBar(master=tab_frame, width=300)
+progress_bar.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+progress_bar.set(0)  # Exemple de valeur de progression
+
+# Fonction pour mettre à jour les informations Spotify
+def update_spotify_info():
+    while True:
+        track_name, artist, progress_min, progress_sec, duration_min, duration_sec, album_image_url = get_current_playback()
+        
+        if track_name and artist:
+            # Mettez à jour les labels ou autres widgets avec les informations de la piste
+            track_label.configure(text=f"{track_name}", font=("Helvetica", 16, "bold"))
+            artist_label.configure(text=f"{artist}", font=("Helvetica", 12))
+
+            progress_label.configure(text=f"{progress_min}:{progress_sec:02d} / {duration_min}:{duration_sec:02d}")
+
+            # Calculez le pourcentage de progression
+            total_progress_seconds = progress_min * 60 + progress_sec
+            total_duration_seconds = duration_min * 60 + duration_sec
+            progress_percentage = total_progress_seconds / total_duration_seconds
+
+            # Mettez à jour la barre de progression
+            progress_bar.set(progress_percentage)
+
+            # Téléchargez et affichez l'image de l'album
+            '''response = requests.get(album_image_url)
+            img_data = response.content'''
+            album_image = Image.open(album_image_url)
+            #album_image = album_image.resize((100, 100), Image.Resampling.LANCZOS)
+            album_photo = customtkinter.CTkImage(album_image, size=(80, 80))
+            album_label.configure(image=album_photo)
+            album_label.image = album_photo  # Gardez une référence à l'image pour éviter qu'elle soit garbage collected
+        else:
+            track_label.configure(text="Track: N/A")
+            artist_label.configure(text="Artist: N/A")
+            progress_label.configure(text="Progress: N/A")
+        time.sleep(0.5)
+    
 # Fonction qui extrait l'icône d'un fichier .exe
 def extract_icon_from_exe(icon_in_path, icon_name, icon_out_path, out_width = 56, out_height = 56):
     import win32ui
@@ -249,35 +311,48 @@ def extract_icon_from_exe(icon_in_path, icon_name, icon_out_path, out_width = 56
     import win32con
     import win32api
     from PIL import Image
+    import pythoncom
+    import win32com.client
 
     print("Extracting icon from exe: ", icon_in_path)
 
-    ico_x = win32api.GetSystemMetrics(win32con.SM_CXICON)
-    ico_y = win32api.GetSystemMetrics(win32con.SM_CYICON)
+    if icon_in_path.lower().endswith(".lnk"):
+        print("Extracting icon from shortcut")
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortcut(icon_in_path)
+        icon_location = shortcut.IconLocation
+        print("Icon location: ", icon_location)
+        return icon_location
 
-    large, small = win32gui.ExtractIconEx(icon_in_path,0)
-    win32gui.DestroyIcon(small[0])
+    elif icon_in_path.lower().endswith(".exe"):
+        ico_x = win32api.GetSystemMetrics(win32con.SM_CXICON)
+        ico_y = win32api.GetSystemMetrics(win32con.SM_CYICON)
 
-    hdc = win32ui.CreateDCFromHandle( win32gui.GetDC(0) )
-    hbmp = win32ui.CreateBitmap()
-    hbmp.CreateCompatibleBitmap( hdc, ico_x, ico_x )
-    hdc = hdc.CreateCompatibleDC()
+        large, small = win32gui.ExtractIconEx(icon_in_path,0)
+        win32gui.DestroyIcon(small[0])
 
-    hdc.SelectObject( hbmp )
-    hdc.DrawIcon( (0,0), large[0] )
+        hdc = win32ui.CreateDCFromHandle( win32gui.GetDC(0) )
+        hbmp = win32ui.CreateBitmap()
+        hbmp.CreateCompatibleBitmap( hdc, ico_x, ico_x )
+        hdc = hdc.CreateCompatibleDC()
 
-    bmpstr = hbmp.GetBitmapBits(True)
-    icon = Image.frombuffer(
-        'RGBA',
-        (32,32),
-        bmpstr, 'raw', 'BGRA', 0, 1
-    )
+        hdc.SelectObject( hbmp )
+        hdc.DrawIcon( (0,0), large[0] )
 
-    full_outpath = os.path.join(icon_out_path, "{}.png".format(icon_name))
-    icon.resize((out_width, out_height))
-    icon.save(full_outpath)
-    #return the final path to the image
-    return full_outpath
+        bmpstr = hbmp.GetBitmapBits(True)
+        icon = Image.frombuffer(
+            'RGBA',
+            (32,32),
+            bmpstr, 'raw', 'BGRA', 0, 1
+        )
+
+        full_outpath = os.path.join(icon_out_path, "{}.png".format(icon_name))
+        icon.resize((out_width, out_height))
+        icon.save(full_outpath)
+        #return the final path to the image
+        return full_outpath
+    
+    return "assets/icon.png"
 
 def create_functions(label, menu, i, j):
     # Create a function to show a shadow when the mouse is over the label
@@ -475,6 +550,12 @@ def main():
     send_data_thread = threading.Thread(target=send_data)
     send_data_thread.daemon = True  # Permet à ce thread de se terminer lorsque le programme principal se termine
     send_data_thread.start()  # Démarre le thread pour l'envoi continu des données
+    
+
+    # Créer un thread pour affiche les données Spotify
+    display_spotify_data = threading.Thread(target=update_spotify_info)
+    display_spotify_data.daemon = True
+    display_spotify_data.start()
 
     app.mainloop()  # Lance l'interface graphique
 

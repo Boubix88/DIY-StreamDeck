@@ -22,3 +22,11 @@ def load_json_assignement(filename):
             return json.load(file)
     except (FileNotFoundError , json.decoder.JSONDecodeError):
         return {}
+    
+# Load SVG icons from the JSON file
+def load_jsvg_icons(filename):
+    try:
+        with open(filename, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError , json.decoder.JSONDecodeError):
+        return {}
