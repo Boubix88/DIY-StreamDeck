@@ -10,9 +10,10 @@ import fileManger as file
 import System
 import subprocess
 import os
-from spotify_api import get_current_playback  # Remplacez par le nom de votre fonction
+from spotify_api import get_current_playback, getSpotifyInfo  # Remplacez par le nom de votre fonction
 import requests
 import time
+import network as net
 
 
 # Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
@@ -20,6 +21,9 @@ colorData = file.load_json("data.json")
 rgb_values = [colorData["R"], colorData["G"], colorData["B"]] # Valeurs RVB initiales (bleu par défaut)
 brightness = colorData["Brightness"]  # Luminosité initiale
 color_speed = colorData["Speed"]  # Vitesse de défilement RGB initiale
+
+screen = 0
+last_screen = 0
 
 # Fonction pour convertir les valeurs RVB en format hexadécimal
 def rgb_to_hex(r, g, b):
@@ -270,10 +274,30 @@ progress_bar = customtkinter.CTkProgressBar(master=tab_frame, width=300)
 progress_bar.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
 progress_bar.set(0)  # Exemple de valeur de progression
 
+
+# ========================================= Fonctions pour les touches ========================================= #
+# Créer une tabview pour les touches
+tab_keys = customtkinter.CTkTabview(master=app, width=250, height=150)
+tab_keys.place(x=560, y=270)
+
+tab_frame = tab_keys.add("Touches")
+
+# Créer les 5 boutons pour switch d'ecran sur l'arduino : pu_info, gpu_info, spotify_info et network_info
+screen_button = customtkinter.CTkButton(tab_frame, text="Changer d'ecran", command=lambda: setCurrentScreen())
+screen_button.grid(row=0, column=0, padx=10, pady=5)
+
+
+def setCurrentScreen():
+    global screen
+    screen += 1 
+    if screen > 4:
+        screen = 0
+
+
 # Fonction pour mettre à jour les informations Spotify
 def update_spotify_info():
     while True:
-        track_name, artist, progress_min, progress_sec, duration_min, duration_sec, album_image_url = get_current_playback()
+        track_name, artist, progress_min, progress_sec, duration_min, duration_sec, album_image_url, _ = get_current_playback()
         
         if track_name and artist:
             # Mettez à jour les labels ou autres widgets avec les informations de la piste
@@ -501,14 +525,45 @@ for i in range(3):  # For each row
 # Fonction pour gérer l'envoi des données à l'Arduino
 def send_data():
     global ser
-    global colorData
+    global colorData, screen, last_screen
 
     while True:
         try:
-            temp = sd.getTemp(cpu_temp_label, gpu_temp_label)
+            #temp = sd.getTemp(cpu_temp_label, gpu_temp_label)
+                 # Check if the play/pause button was pressed
+            if sd.isPlayPausePressed():
+                clear = True
+            else:
+                clear = False
+            
+            cpu_info = sd.getCPUInfo(cpu_temp_label)
+            gpu_info = sd.getGPUInfo(gpu_temp_label)
+            _,_,_,_,_,_,_,clear = get_current_playback()
+            spotify_info = getSpotifyInfo()
+            network_info = net.getNetworkInfo()
+            #clear = True
             vol = sd.getVolume()
+
             sd.readSerial()
-            sd.sendToArduino(temp, vol, colorData) # On envoie les données à l'Arduino
+
+            screen_data = None
+            if screen == 0:
+                screen_data = cpu_info
+            elif screen == 1:
+                screen_data = gpu_info
+            elif screen == 2:
+                screen_data = spotify_info
+            elif screen == 3:
+                screen_data = network_info
+                clear = True
+            elif screen == 4:
+                screen_data = colorData
+
+            if last_screen != screen:
+                clear = True
+                last_screen = screen
+
+            sd.sendToArduino(screen_data, vol, colorData, clear) # On envoie les données à l'Arduino
         except (OSError):
             print("Erreur lors de la connexion à l'Arduino.")
             #messagebox.showinfo("Erreur", "En attente de connexion ...")
@@ -541,7 +596,9 @@ def main():
         print("Erreur lors de la connexion à l'Arduino.")
         pass
 
-    sd.start_temp_thread()  # Démarre le thread pour la lecture de la température
+    sd.start_cpu_thread()  # Démarre le thread pour la lecture des infos CPU
+    sd.start_gpu_thread()  # Démarre le thread pour la lecture des infos GPU
+    net.start_network_thread() # Démarre le thread pour la lecture des infos réseau
 
     # Créez un thread pour envoyer les données à l'Arduino
     send_data_thread = threading.Thread(target=send_data)
