@@ -1,0 +1,7 @@
+
+Python/.env
+Python/.cache
+/Python/__pycache__
+Python/assignments.json
+Python/data.json
+Python/OpenHardwareMonitorLib.sys

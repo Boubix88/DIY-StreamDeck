@@ -126,61 +126,52 @@ def getNetworkInfo():
     for path in grid_svg:
         print(path)'''
 
+    if data_recv and data_sent:
+        download_speed = (data_recv[-1] / (1024 * 1024)) * 10  # Convert to Mbps
+        upload_speed = (data_sent[-1] / (1024 * 1024)) * 10  # Convert to Mbps
+    else:
+        download_speed = 0
+        upload_speed = 0
+
     return {
-        "txt": {
-            "c": {
-                "R": 255,
-                "G": 255,
-                "B": 255
-            },
-            "txt": [
-                {
-                    "x": 70,
-                    "y": 20,
-                    "s": 2,
-                    "c": "\x19 56 Mbps"
-                },
-                {
-                    "x": 70,
-                    "y": 40,
-                    "s": 2,
-                    "c": "\x18 12 Mbps"
-                },
-                {
-                    "x": 86,
-                    "y": 180,
-                    "s": 2,
-                    "c": "Reseau"
-                }
+        "t": {
+            "c": "FFFFFF",
+            "t": [
+                [
+                    70,
+                    20,
+                    2,
+                    f"\x19 {download_speed:.2f} Mbps"
+                ],
+                [
+                    70,
+                    40,
+                    2,
+                    f"\x18 {upload_speed:.2f} Mbps"
+                ],
+                [
+                    86,
+                    180,
+                    2,
+                    "Reseau"
+                ]
             ]
         },
-        "svg": [
-            {
-                "p": f"{grid_svg}",
-                "c": {
-                    "R": 255,
-                    "G": 255,
-                    "B": 255
-                }
-            },
-            {
-                "p": f"{download_paths_svg}",
-                "c": {
-                    "R": 0,
-                    "G": 0,
-                    "B": 255
-                }
-            },
-            {
-                "p": f"{upload_paths_svg}",
-                "c": {
-                    "R": 255,
-                    "G": 0,
-                    "B": 0
-                }
-            }
+        "v": [
+            [
+                f"{grid_svg}",
+                "FFFFFF"
+            ],
+            [
+                f"{download_paths_svg}",
+                "0000FF"
+            ],
+            [
+                f"{upload_paths_svg}",
+                "FF0000"
+            ]
         ],
-        "svgC": bool(True)
+        "vC": bool(True)
     }
 
 def start_network_thread():

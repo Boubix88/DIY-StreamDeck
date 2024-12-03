@@ -18,9 +18,9 @@ import network as net
 
 # Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
 colorData = file.load_json("data.json")
-rgb_values = [colorData["R"], colorData["G"], colorData["B"]] # Valeurs RVB initiales (bleu par défaut)
-brightness = colorData["Br"]  # Luminosité initiale
-color_speed = colorData["S"]  # Vitesse de défilement RGB initiale
+rgb_values = [int(colorData[1]), int(colorData[2]), int(colorData[3])] # Valeurs RVB initiales (bleu par défaut)
+brightness = colorData[4]  # Luminosité initiale
+color_speed = colorData[5]  # Vitesse de défilement RGB initiale
 
 screen = 0
 last_screen = 0
@@ -59,8 +59,9 @@ def set_brightness(value, var):
 
 # Envoi des valeurs RVB et de luminosité à l'Arduino
 def apply_changes():
+    # Mode, R, G, B, Br, S
     global ser, rgb_values, brightness, colorData
-    colorData = {"M" : 1, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]),"Br": brightness, "S": 20}
+    colorData = [1, int(rgb_values[0]), int(rgb_values[1]), int(rgb_values[2]), brightness, 20]
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -68,7 +69,7 @@ def update_static_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     static_speed_var.set(int(value))
-    colorData = {"M" : 2, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Br": brightness, "S": int(value)}
+    colorData = [2, int(rgb_values[0]), int(rgb_values[1]), int(rgb_values[2]), brightness, int(value)]
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -76,7 +77,7 @@ def update_scroll_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     scroll_speed_var.set(int(value))
-    colorData = {"M" : 3, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Br": brightness, "S": int(value)}
+    colorData = [3, int(rgb_values[0]), int(rgb_values[1]), int(rgb_values[2]), brightness, int(value)]
     file.save_json(colorData, "data.json")
 
 def on_close():
@@ -276,14 +277,12 @@ progress_bar.set(0)  # Exemple de valeur de progression
 
 
 # ========================================= Fonctions pour les touches ========================================= #
-# Créer une tabview pour les touches
-tab_keys = customtkinter.CTkTabview(master=app, width=250, height=150)
-tab_keys.place(x=560, y=270)
-
-tab_frame = tab_keys.add("Touches")
+# Créer un frame pour les touches
+tab_keys_frame = customtkinter.CTkFrame(master=app, width=250, height=150)
+tab_keys_frame.place(x=560, y=270)
 
 # Créer les 5 boutons pour switch d'ecran sur l'arduino : pu_info, gpu_info, spotify_info et network_info
-screen_button = customtkinter.CTkButton(tab_frame, text="Changer d'ecran", command=lambda: setCurrentScreen())
+screen_button = customtkinter.CTkButton(tab_keys_frame, text="Changer d'ecran", command=lambda: setCurrentScreen())
 screen_button.grid(row=0, column=0, padx=10, pady=5)
 
 

@@ -87,61 +87,46 @@ def getSpotifyInfo():
     x_track = math.fabs(128 - ((6 * len(track_name) * 2) / 2) - 2 * 6)
 
     return {
-        "txt": {
-            "c": {
-                "R": 255,
-                "G": 255,
-                "B": 255
-            },
-            "txt": [
-                {
-                    "x": x_artist,
-                    "y": 142,
-                    "s": 2,
-                    "c": artist
-                },
-                {
-                    "x": x_track,
-                    "y": 165,
-                    "s": 2,
-                    "c": track_name
-                },
-                {
-                    "x": 128 - (6 * 11 * 2) / 2 - 2 * 6,
-                    "y": 205,
-                    "s": 2,
-                    "c": f"{progress_min:02d}:{progress_sec:02d}/{duration_min:02d}:{duration_sec:02d}"
-                }
+        "t": {
+            "c": "FFFFFF",
+            "t": [
+                [
+                    x_artist,
+                    142,
+                    2,
+                    artist
+
+                ],
+                [
+                    x_track,
+                    165,
+                    2,
+                    track_name
+                ],
+                [
+                    128 - (6 * 11 * 2) / 2 - 2 * 6,
+                    205,
+                    2,
+                    f"{progress_min:02d}:{progress_sec:02d}/{duration_min:02d}:{duration_sec:02d}"
+                ]
             ]
         },
-        "svg": [
-            {
-                "p": f"M{45 + progress} 195 H192 Z M{45 + progress} 193 H195 Z M{45 + progress} 194 H195 Z M{45 + progress} 195 H195 Z",
-                "c": {
-                    "R": 255,
-                    "G": 255,
-                    "B": 255
-                }
-            },
-            {
-                "p": f"M45 192 H{45 + progress} Z M45 193 H{45 + progress} Z M45 194 H{45 + progress} Z M45 195 H{45 + progress} Z",
-                "c": {
-                    "R": 50,
-                    "G": 156,
-                    "B": 36
-                }
-            },
-            {
-                "p": "M63 41V92L97 127H144L180 96V44L147 17H98ZM141 98 L129 90H114L97 93 L95 87 L113 85H131L145 93ZM146 84 L132 76H112L96 77 L94 71 L112 69H134L150 78ZM153 67 L136 59H109L94 61 L90 54 L109 50H138L157 60 L153 67",
-                "c": {
-                    "R": 50,
-                    "G": 156,
-                    "B": 36
-                }
+        "v": [
+            [
+                f"M{45 + progress} 195 H192 Z M{45 + progress} 193 H195 Z M{45 + progress} 194 H195 Z M{45 + progress} 195 H195 Z",
+                "FFFFFF"
+            ],
+            [
+                f"M45 192 H{45 + progress} Z M45 193 H{45 + progress} Z M45 194 H{45 + progress} Z M45 195 H{45 + progress} Z",
+                "329C24"
+            ],
+            [
+                "M70 40L64 72L74 107L104 124H135L164 107L173 75L170 46L142 21H101ZM137 97L126 88H110L93 92L90 90L91 86L110 82H127L141 91V96ZM141 82L127 73H107L91 77H89L90 71L108 65H130L146 77V81ZM148 68L132 57H105L90 61H86V53L105 48H134L152 59L153 65L148 68",
+                "329C24"
                 
-            }
+            ]
         ],
-        "svgC": bool(False)
+        "vC": bool(False)
     }
 
 '''{
@@ -152,3 +137,5 @@ def getSpotifyInfo():
                         "B": 36
                     }
                 },'''
+
+''' Spotify SVG qui marche : M63 41V92L97 127H144L180 96V44L147 17H98ZM141 98 L129 90H114L97 93 L95 87 L113 85H131L145 93ZM146 84 L132 76H112L96 77 L94 71 L112 69H134L150 78ZM153 67 L136 59H109L94 61 L90 54 L109 50H138L157 60 L153 67'''

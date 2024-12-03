@@ -295,7 +295,7 @@ void processReceivedData() {
     }
 
     // Vérification du type de données reçu
-    uint8_t volume = jsonDocument["vol"];
+    uint8_t volume = jsonDocument["v"];
     if (/*jsonDocument.containsKey("volume") || */(currentScreen == 'v'/* && milliS != -1*/) || lastVolume != volume) {
       /*lastCpuTemp = 0;
       lastGpuTemp = 0; 
@@ -323,7 +323,7 @@ void processReceivedData() {
       lastVolume = volume;
       lastScreen = 'v';*/
     } 
-    if (jsonDocument.containsKey("screen")) {
+    if (jsonDocument.containsKey("s")) {
       iterationDispVol = 0;
 
       if (lastScreen == 'v' || lastScreen == 'c') {
@@ -332,26 +332,26 @@ void processReceivedData() {
       }
 
       // ChatGPT = Gérer ici la logique d'affichage des données du JSON
-      displayData(jsonDocument["screen"]);
+      displayData(jsonDocument["s"]);
     }
 
     // Si on recois l'odre de clear l'ecran
-    if (jsonDocument.containsKey("clear")) {
-      if (jsonDocument["clear"] == 1) clearScreen();
+    if (jsonDocument.containsKey("clr")) {
+      if (jsonDocument["clr"] == 1) clearScreen();
     }
     
     // Gestion de la couleur du ruban
     if (jsonDocument.containsKey("c")) {
-        JsonObject colorData = jsonDocument["c"];
-        switch (colorData["Mode"].as<uint8_t>()) {
+        JsonArray colorData = jsonDocument["c"];
+        switch (colorData[0].as<uint8_t>()) {
             case MODE_STATIC:
-                setStaticLedColor(colorData["R"], colorData["G"], colorData["B"]);
+                setStaticLedColor(colorData[1], colorData[2], colorData[3]);
                 break;
             case MODE_SCROLLING_STATIC:
-                rainbow(colorData["S"]);
+                rainbow(colorData[5]);
                 break;
             case MODE_SCROLLING_RGB:
-                rainbowCycle(colorData["S"]);
+                rainbowCycle(colorData[5]);
                 break;
         }
     }
@@ -368,35 +368,33 @@ void processReceivedData() {
 // Fonction générique pour afficher les données d'une catégorie
 void displayData(JsonObject data) {
   // Gestion des textes
-  if (data.containsKey("txt")) {
-    JsonObject textData = data["txt"];
-    uint16_t textColor = tft.color565(
-        textData["c"]["R"], textData["c"]["G"], textData["c"]["B"]);
+  if (data.containsKey("t")) {
+    JsonObject textData = data["t"];
+    uint16_t textColor = hexToColor565(textData["c"]); // Couleur compactée
 
     // Accéder directement aux éléments du texte sans créer un objet JSON
-    JsonArray textLines = textData["txt"].as<JsonArray>();
+    JsonArray textLines = textData["t"].as<JsonArray>();
 
-    for (JsonVariant line : textLines) {
-      uint8_t x = line["x"];
-      uint8_t y = line["y"];
-      uint8_t size = line["s"];
-      const char* content = line["c"];
+    for (JsonArray  line : textLines) {
+      uint8_t x = line[0];
+      uint8_t y = line[1];
+      uint8_t size = line[2];
+      const char* content = line[3];
       
       writeText(x, y, size, textColor, content);
     }
   }
 
   // Gestion des SVG
-  if (data.containsKey("svg")) {
-    JsonArray svgData = data["svg"].as<JsonArray>();
+  if (data.containsKey("v")) {
+    JsonArray svgData = data["v"].as<JsonArray>();
 
-    if (data["svgC"] == 1) tft.fillRect(0, 60, 240, 115, GC9A01A_BLACK);
+    if (data["vC"] == 1) tft.fillRect(0, 60, 240, 115, GC9A01A_BLACK);
 
     // Itérer directement sur les éléments du tableau SVG
-    for (JsonVariant svg : svgData) {
-      uint16_t svgColor = tft.color565(svg["c"]["R"], svg["c"]["G"], svg["c"]["B"]);
-      const char* path = svg["p"];
-      
+    for (JsonArray  svg : svgData) {
+      const char* path = svg[0];
+      uint16_t svgColor = hexToColor565(svg[1]); // Couleur compactée
       drawSVGPath(path, svgColor);
     }
 
@@ -412,6 +410,20 @@ void displayData(JsonObject data) {
     }*/
   }
 }
+
+uint16_t hexToColor565(const char* hexColor) {
+  // Convertir la chaîne hexadécimale en un entier RGB
+  uint32_t rgb = strtol(&hexColor[0], NULL, 16);
+
+  // Extraire les composantes rouge, verte et bleue
+  uint8_t r = (rgb >> 16) & 0xFF; // Rouge
+  uint8_t g = (rgb >> 8) & 0xFF;  // Vert
+  uint8_t b = rgb & 0xFF;         // Bleu
+
+  // Convertir en format color565
+  return tft.color565(r, g, b);
+}
+
 
 void setup() {
   // Initialisation du bouton 1
@@ -482,12 +494,12 @@ void drawSVGPath(const char *svgPath, uint16_t color) {
     } 
     else if (cmd == 'H') { // Ligne horizontale
       uint16_t x1 = strtol(p, &p, 10);
-      tft.drawLine(x, y, x1, y, color);
+      tft.drawFastHLine (x, y,  x1 - x, color);
       x = x1;
     } 
     else if (cmd == 'V') { // Ligne verticale
       uint16_t y1 = strtol(p, &p, 10);
-      tft.drawLine(x, y, x, y1, color);
+      tft.drawFastVLine(x, y, y1 - y, color);
       y = y1;
     } 
     else if (cmd == 'Z') { // ClosePath

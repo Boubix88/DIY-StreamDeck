@@ -116,13 +116,36 @@ def get_process_count():
     # Retourner le nombre de processus
     return len(process_list)
 
+#Proebleme avec les sensors, fonctionne avec I5 12 coeurs donc pars bon index
 # On met a jour les valeurs
+def get_sensor_index(hardware, sensor_type, sensor_name):
+    for i, sensor in enumerate(hardware.Sensors):
+        if sensor.SensorType == sensor_type and sensor.Name == sensor_name:
+            return i
+    return None
+
 def read_cpu_info():
     global last_cpu_temp, last_usage_cpu, last_frequency_cpu, last_process_count_cpu, keep_reading_cpu
+    cpu_temp_index = get_sensor_index(c.Hardware[0], SensorType.Temperature, "CPU Package")
+    cpu_usage_index = get_sensor_index(c.Hardware[0], SensorType.Load, "CPU Total")
+    cpu_frequency_index = get_sensor_index(c.Hardware[0], SensorType.Clock, "CPU Core #1")
+
     while keep_reading_cpu:
-        last_cpu_temp = c.Hardware[0].Sensors[13].get_Value()
-        last_usage_cpu = c.Hardware[0].Sensors[21].get_Value()
-        last_frequency_cpu = round(c.Hardware[0].Sensors[14].get_Value() / 1000, 1)
+        if cpu_temp_index is not None:
+            last_cpu_temp = c.Hardware[0].Sensors[cpu_temp_index].get_Value()
+        else:
+            last_cpu_temp = 0
+
+        if cpu_usage_index is not None:
+            last_usage_cpu = c.Hardware[0].Sensors[cpu_usage_index].get_Value()
+        else:
+            last_usage_cpu = 0
+
+        if cpu_frequency_index is not None:
+            last_frequency_cpu = round(c.Hardware[0].Sensors[cpu_frequency_index].get_Value() / 1000, 1)
+        else:
+            last_frequency_cpu = 0
+
         last_process_count_cpu = get_process_count()
         c.Hardware[0].Update()
         time.sleep(1)
@@ -130,12 +153,32 @@ def read_cpu_info():
 
 def read_gpu_info():
     global last_gpu_temp, last_frequency_gpu, last_memory_used_gpu, last_usage_gpu, keep_reading_gpu
+    gpu_temp_index = get_sensor_index(c.Hardware[1], SensorType.Temperature, "GPU Core")
+    gpu_usage_index = get_sensor_index(c.Hardware[1], SensorType.Load, "GPU Core")
+    gpu_frequency_index = get_sensor_index(c.Hardware[1], SensorType.Clock, "GPU Core")
+    gpu_memory_index = get_sensor_index(c.Hardware[1], SensorType.SmallData, "GPU Memory")
 
     while keep_reading_gpu:
-        last_gpu_temp = c.Hardware[1].Sensors[0].get_Value()
-        last_frequency_gpu = round(c.Hardware[1].Sensors[1].get_Value() / 1000, 1)
-        last_memory_used_gpu = round(c.Hardware[1].Sensors[11].get_Value() / 1000, 1)
-        last_usage_gpu = c.Hardware[1].Sensors[6].get_Value()
+        if gpu_temp_index is not None:
+            last_gpu_temp = round(c.Hardware[1].Sensors[gpu_temp_index].get_Value())
+        else:
+            last_gpu_temp = 0
+
+        if gpu_usage_index is not None:
+            last_usage_gpu = c.Hardware[1].Sensors[gpu_usage_index].get_Value()
+        else:
+            last_usage_gpu = 0
+
+        if gpu_frequency_index is not None:
+            last_frequency_gpu = round(c.Hardware[1].Sensors[gpu_frequency_index].get_Value() / 1000, 1)
+        else:
+            last_frequency_gpu = 0
+
+        if gpu_memory_index is not None:
+            last_memory_used_gpu = round(c.Hardware[1].Sensors[gpu_memory_index].get_Value() / 1000, 1)
+        else:
+            last_memory_used_gpu = 0
+
         c.Hardware[1].Update()
         time.sleep(1)
     c.Close()
@@ -152,56 +195,48 @@ def getCPUInfo(cpu_temp_label):
     cpu_process_count_label.configure(text=str(last_process_count_cpu))'''
 
     return {
-        "txt": {
-            "c": {
-                "R": 255,
-                "G": 255,
-                "B": 255
-            },
-            "txt": [
-                {
-                    "x": 20,
-                    "y": 60,
-                    "s": 3,
-                    "c": str(round(float(last_cpu_temp))) + "\x09C"
-                },
-                {
-                    "x": 160,
-                    "y": 60,
-                    "s": 3,
-                    "c": str(round(float(last_usage_cpu))) + " %"
-                },
-                {
-                    "x": 20,
-                    "y": 170,
-                    "s": 3,
-                    "c": str(float(last_frequency_cpu)) + " GHz"
-                },
-                {
-                    "x": 160,
-                    "y": 170,
-                    "s": 3,
-                    "c": str(round(float(last_process_count_cpu)))
-                },
-                {
-                    "x": 92,
-                    "y": 112,
-                    "s": 4,
-                    "c": "CPU"
-                }
+        "t": {
+            "c": "FFFFFF",
+            "t": [
+                [
+                    20,
+                    60,
+                    3,
+                    str(round(float(last_cpu_temp))) + "\x09C"
+                ],
+                [
+                    160,
+                    60,
+                    3,
+                    str(round(float(last_usage_cpu))) + " %"
+                ],
+                [
+                    20,
+                    170,
+                    3,
+                    str(float(last_frequency_cpu)) + " GHz"
+                ],
+                [
+                    160,
+                    170,
+                    3,
+                    str(round(float(last_process_count_cpu)))
+                ],
+                [
+                    92,
+                    112,
+                    4,
+                    "CPU"
+                ]
             ]
             },
-            "svg": [
-                {
-                    "p": "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "c": {
-                        "R": 255,
-                        "G": 255,
-                        "B": 255
-                    }
-                }
+            "v": [
+                [
+                    "M73 87H175V160H73ZM78 92V155H170V92Z",
+                    "FFFFFF"
+                ]
             ],
-            "svgC": bool(False)
+            "vC": bool(False)
         }
 
 # On récupère les informations du GPU
@@ -216,56 +251,48 @@ def getGPUInfo(gpu_temp_label):
     gpu_memory_label.configure(text=str(last_memory_used_gpu) + " MB")'''
 
     return {
-        "txt": {
-            "c": {
-                "R": 255,
-                "G": 255,
-                "B": 255
-            },
-            "txt": [
-                {
-                    "x": 20,
-                    "y": 60,
-                    "s": 3,
-                    "c": str(round(float(last_gpu_temp))) + "\x09C"
-                },
-                {
-                    "x": 160,
-                    "y": 60,
-                    "s": 3,
-                    "c": str(round(float(last_usage_gpu))) + " %"
-                },
-                {
-                    "x": 20,
-                    "y": 170,
-                    "s": 3,
-                    "c": str(float(last_frequency_gpu)) + " GHz"
-                },
-                {
-                    "x": 160,
-                    "y": 170,
-                    "s": 3,
-                    "c": str(float(last_memory_used_gpu)) + " Go"
-                },
-                {
-                    "x": 92,
-                    "y": 112,
-                    "s": 4,
-                    "c": "GPU"
-                }
+        "t": {
+            "c": "FFFFFF",
+            "t": [
+                [
+                    20,
+                    60,
+                    3,
+                    str(round(float(last_gpu_temp))) + "\x09C"
+                ],
+                [
+                    160,
+                    60,
+                    3,
+                    str(round(float(last_usage_gpu))) + " %"
+                ],
+                [
+                    20,
+                    170,
+                    3,
+                    str(float(last_frequency_gpu)) + " GHz"
+                ],
+                [
+                    160,
+                    170,
+                    3,
+                    str(float(last_memory_used_gpu)) + " Go"
+                ],
+                [
+                    92,
+                    112,
+                    4,
+                    "GPU"
+                ]
             ]
             },
-            "svg": [
-                {
-                    "p": "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "c": {
-                        "R": 255,
-                        "G": 255,
-                        "B": 255
-                    }
-                }
+            "v": [
+                [
+                    "M73 87H175V160H73ZM78 92V155H170V92Z",
+                    "FFFFFF"
+                ]
             ],
-            "svgC": bool(False)
+            "vC": bool(False)
         }
 
 
@@ -293,10 +320,10 @@ def sendToArduino(screen_data, vol, color, clear):
     global ser, connexion_label
 
     data = {
-        "screen": screen_data,
-        "vol": vol,
+        "s": screen_data,
+        "v": vol,
         "c": color,
-        "clear": bool(clear)
+        "clr": bool(clear)
     }
 
     # Convertir le dictionnaire en chaîne JSON
@@ -316,7 +343,7 @@ def sendToArduino(screen_data, vol, color, clear):
         print("Erreur lors de l'envoi des données à l'Arduino:", e)
         connexion_label.pack(side="top")  # Show the label
         connectToArduino()
-    #print("Données envoyées à l'Arduino:", json_data)
+    print("Données envoyées à l'Arduino:", json_data)
 
 # Affiche ce que l'Arduino envoie sur le port série
 def readSerial():
