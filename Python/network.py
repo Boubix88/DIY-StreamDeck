@@ -127,59 +127,60 @@ def getNetworkInfo():
         print(path)'''
 
     return {
-        "text": {
-            "color": {
+        "txt": {
+            "c": {
                 "R": 255,
                 "G": 255,
                 "B": 255
             },
-            "text": [
+            "txt": [
                 {
                     "x": 70,
                     "y": 20,
-                    "size": 2,
-                    "content": "\x19 56 Mbps"
+                    "s": 2,
+                    "c": "\x19 56 Mbps"
                 },
                 {
                     "x": 70,
                     "y": 40,
-                    "size": 2,
-                    "content": "\x18 12 Mbps"
+                    "s": 2,
+                    "c": "\x18 12 Mbps"
                 },
                 {
                     "x": 86,
                     "y": 180,
-                    "size": 2,
-                    "content": "Reseau"
+                    "s": 2,
+                    "c": "Reseau"
                 }
             ]
         },
         "svg": [
             {
-                "path": f"{grid_svg}",
-                "color": {
+                "p": f"{grid_svg}",
+                "c": {
                     "R": 255,
                     "G": 255,
                     "B": 255
                 }
             },
             {
-                "path": f"{download_paths_svg}",
-                "color": {
+                "p": f"{download_paths_svg}",
+                "c": {
                     "R": 0,
                     "G": 0,
                     "B": 255
                 }
             },
             {
-                "path": f"{upload_paths_svg}",
-                "color": {
+                "p": f"{upload_paths_svg}",
+                "c": {
                     "R": 255,
                     "G": 0,
                     "B": 0
                 }
             }
-        ]
+        ],
+        "svgC": bool(True)
     }
 
 def start_network_thread():

@@ -152,55 +152,56 @@ def getCPUInfo(cpu_temp_label):
     cpu_process_count_label.configure(text=str(last_process_count_cpu))'''
 
     return {
-        "text": {
-            "color": {
+        "txt": {
+            "c": {
                 "R": 255,
                 "G": 255,
                 "B": 255
             },
-            "text": [
+            "txt": [
                 {
                     "x": 20,
                     "y": 60,
-                    "size": 3,
-                    "content": str(round(float(last_cpu_temp))) + "\x09C"
+                    "s": 3,
+                    "c": str(round(float(last_cpu_temp))) + "\x09C"
                 },
                 {
                     "x": 160,
                     "y": 60,
-                    "size": 3,
-                    "content": str(round(float(last_usage_cpu))) + " %"
+                    "s": 3,
+                    "c": str(round(float(last_usage_cpu))) + " %"
                 },
                 {
                     "x": 20,
                     "y": 170,
-                    "size": 3,
-                    "content": str(float(last_frequency_cpu)) + " GHz"
+                    "s": 3,
+                    "c": str(float(last_frequency_cpu)) + " GHz"
                 },
                 {
                     "x": 160,
                     "y": 170,
-                    "size": 3,
-                    "content": str(round(float(last_process_count_cpu)))
+                    "s": 3,
+                    "c": str(round(float(last_process_count_cpu)))
                 },
                 {
                     "x": 92,
                     "y": 112,
-                    "size": 4,
-                    "content": "CPU"
+                    "s": 4,
+                    "c": "CPU"
                 }
             ]
             },
             "svg": [
                 {
-                    "path": "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "color": {
+                    "p": "M73 87H175V160H73ZM78 92V155H170V92Z",
+                    "c": {
                         "R": 255,
                         "G": 255,
                         "B": 255
                     }
                 }
-            ]
+            ],
+            "svgC": bool(False)
         }
 
 # On récupère les informations du GPU
@@ -215,55 +216,56 @@ def getGPUInfo(gpu_temp_label):
     gpu_memory_label.configure(text=str(last_memory_used_gpu) + " MB")'''
 
     return {
-        "text": {
-            "color": {
+        "txt": {
+            "c": {
                 "R": 255,
                 "G": 255,
                 "B": 255
             },
-            "text": [
+            "txt": [
                 {
                     "x": 20,
                     "y": 60,
-                    "size": 3,
-                    "content": str(round(float(last_gpu_temp))) + "\x09C"
+                    "s": 3,
+                    "c": str(round(float(last_gpu_temp))) + "\x09C"
                 },
                 {
                     "x": 160,
                     "y": 60,
-                    "size": 3,
-                    "content": str(round(float(last_usage_gpu))) + " %"
+                    "s": 3,
+                    "c": str(round(float(last_usage_gpu))) + " %"
                 },
                 {
                     "x": 20,
                     "y": 170,
-                    "size": 3,
-                    "content": str(float(last_frequency_gpu)) + " GHz"
+                    "s": 3,
+                    "c": str(float(last_frequency_gpu)) + " GHz"
                 },
                 {
                     "x": 160,
                     "y": 170,
-                    "size": 3,
-                    "content": str(float(last_memory_used_gpu)) + " Go"
+                    "s": 3,
+                    "c": str(float(last_memory_used_gpu)) + " Go"
                 },
                 {
                     "x": 92,
                     "y": 112,
-                    "size": 4,
-                    "content": "GPU"
+                    "s": 4,
+                    "c": "GPU"
                 }
             ]
             },
             "svg": [
                 {
-                    "path": "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "color": {
+                    "p": "M73 87H175V160H73ZM78 92V155H170V92Z",
+                    "c": {
                         "R": 255,
                         "G": 255,
                         "B": 255
                     }
                 }
-            ]
+            ],
+            "svgC": bool(False)
         }
 
 
@@ -292,8 +294,8 @@ def sendToArduino(screen_data, vol, color, clear):
 
     data = {
         "screen": screen_data,
-        "volume": vol,
-        "color": color,
+        "vol": vol,
+        "c": color,
         "clear": bool(clear)
     }
 

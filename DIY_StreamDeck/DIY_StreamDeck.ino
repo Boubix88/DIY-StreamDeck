@@ -44,8 +44,8 @@ unsigned long tmpStart;
 const long resetInterval = 4;  // Intervalle de temps pour réinitialiser le timer
 
 uint8_t lastVolume = 0;
-uint8_t lastCpuTemp = 0;
-uint8_t lastGpuTemp = 0;
+//uint8_t lastCpuTemp = 0;
+//uint8_t lastGpuTemp = 0;
 
 uint8_t indexLed = 0;
 uint8_t iterationDispVol = 0;
@@ -60,16 +60,17 @@ void clearScreen() {
   tft.fillScreen(GC9A01A_BLACK);
 }
 
-void writeText(int x, int y, int size, uint16_t color, const char* text) {
+void writeText(uint8_t x, uint8_t y, uint8_t size, uint16_t color, const char* text) {
     size_t length = strlen(text);
-    tft.fillRect(x, y, length * size * TEXT_SIZE_WIDTH, size * TEXT_SIZE_HEIGHT, GC9A01A_BLACK);
+    //tft.fillRect(x, y, length * size * TEXT_SIZE_WIDTH, size * TEXT_SIZE_HEIGHT, GC9A01A_BLACK);
     tft.setCursor(x, y);
     tft.setTextSize(size);
-    tft.setTextColor(color);
+    //tft.setTextColor(color);
+    tft.setTextColor(color, GC9A01A_BLACK);
     tft.println(text);
 }
 
-void writeText(int x, int y, int size, uint16_t color, const String& text) {
+void writeText(uint8_t x, uint8_t y, uint8_t size, uint16_t color, const String& text) {
     size_t length = text.length();
     tft.fillRect(x, y, length * size * TEXT_SIZE_WIDTH, size * TEXT_SIZE_HEIGHT, GC9A01A_BLACK);
     tft.setCursor(x, y);
@@ -78,7 +79,7 @@ void writeText(int x, int y, int size, uint16_t color, const String& text) {
     tft.println(text);
 }
 
-void writeText(int x, int y, int size, uint16_t color, char character) {
+void writeText(uint8_t x, uint8_t y, uint8_t size, uint16_t color, char character) {
     size_t length = 1; // Un seul caractère
     tft.fillRect(x, y, length * size * TEXT_SIZE_WIDTH, size * TEXT_SIZE_HEIGHT, GC9A01A_BLACK);
     tft.setCursor(x, y);
@@ -90,7 +91,8 @@ void writeText(int x, int y, int size, uint16_t color, char character) {
 
 void startScreen() {
     // On remet toutes les anciennes valeurs à 0 pour pas que l'affichage bug
-    lastVolume = lastCpuTemp = lastGpuTemp = iterationDispVol = 0;
+    //lastVolume = lastCpuTemp = lastGpuTemp = iterationDispVol = 0;
+    lastVolume = iterationDispVol = 0;
 
     writeText(40, 115, 2, GC9A01A_WHITE, "Connection ...");
 
@@ -293,7 +295,7 @@ void processReceivedData() {
     }
 
     // Vérification du type de données reçu
-    uint8_t volume = jsonDocument["volume"];
+    uint8_t volume = jsonDocument["vol"];
     if (/*jsonDocument.containsKey("volume") || */(currentScreen == 'v'/* && milliS != -1*/) || lastVolume != volume) {
       /*lastCpuTemp = 0;
       lastGpuTemp = 0; 
@@ -339,17 +341,17 @@ void processReceivedData() {
     }
     
     // Gestion de la couleur du ruban
-    if (jsonDocument.containsKey("color")) {
-        JsonObject colorData = jsonDocument["color"];
+    if (jsonDocument.containsKey("c")) {
+        JsonObject colorData = jsonDocument["c"];
         switch (colorData["Mode"].as<uint8_t>()) {
             case MODE_STATIC:
                 setStaticLedColor(colorData["R"], colorData["G"], colorData["B"]);
                 break;
             case MODE_SCROLLING_STATIC:
-                rainbow(colorData["Speed"]);
+                rainbow(colorData["S"]);
                 break;
             case MODE_SCROLLING_RGB:
-                rainbowCycle(colorData["Speed"]);
+                rainbowCycle(colorData["S"]);
                 break;
         }
     }
@@ -366,19 +368,19 @@ void processReceivedData() {
 // Fonction générique pour afficher les données d'une catégorie
 void displayData(JsonObject data) {
   // Gestion des textes
-  if (data.containsKey("text")) {
-    JsonObject textData = data["text"];
+  if (data.containsKey("txt")) {
+    JsonObject textData = data["txt"];
     uint16_t textColor = tft.color565(
-        textData["color"]["R"], textData["color"]["G"], textData["color"]["B"]);
+        textData["c"]["R"], textData["c"]["G"], textData["c"]["B"]);
 
     // Accéder directement aux éléments du texte sans créer un objet JSON
-    JsonArray textLines = textData["text"].as<JsonArray>();
+    JsonArray textLines = textData["txt"].as<JsonArray>();
 
     for (JsonVariant line : textLines) {
       uint8_t x = line["x"];
       uint8_t y = line["y"];
-      uint8_t size = line["size"];
-      const char* content = line["content"];
+      uint8_t size = line["s"];
+      const char* content = line["c"];
       
       writeText(x, y, size, textColor, content);
     }
@@ -388,13 +390,26 @@ void displayData(JsonObject data) {
   if (data.containsKey("svg")) {
     JsonArray svgData = data["svg"].as<JsonArray>();
 
+    if (data["svgC"] == 1) tft.fillRect(0, 60, 240, 115, GC9A01A_BLACK);
+
     // Itérer directement sur les éléments du tableau SVG
     for (JsonVariant svg : svgData) {
-      uint16_t svgColor = tft.color565(svg["color"]["R"], svg["color"]["G"], svg["color"]["B"]);
-      const char* path = svg["path"];
+      uint16_t svgColor = tft.color565(svg["c"]["R"], svg["c"]["G"], svg["c"]["B"]);
+      const char* path = svg["p"];
       
       drawSVGPath(path, svgColor);
     }
+
+    // On clear la partie du SVG
+    /*if (data.containsKey("svgC")) {
+        if (data["svgC"] == 1) {
+          for (JsonVariant svg : svgData) {
+            const char* path = svg["p"];
+            
+            drawSVGPath(path, GC9A01A_BLACK);
+          }
+        }
+    }*/
   }
 }
 

@@ -19,8 +19,8 @@ import network as net
 # Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
 colorData = file.load_json("data.json")
 rgb_values = [colorData["R"], colorData["G"], colorData["B"]] # Valeurs RVB initiales (bleu par défaut)
-brightness = colorData["Brightness"]  # Luminosité initiale
-color_speed = colorData["Speed"]  # Vitesse de défilement RGB initiale
+brightness = colorData["Br"]  # Luminosité initiale
+color_speed = colorData["S"]  # Vitesse de défilement RGB initiale
 
 screen = 0
 last_screen = 0
@@ -60,7 +60,7 @@ def set_brightness(value, var):
 # Envoi des valeurs RVB et de luminosité à l'Arduino
 def apply_changes():
     global ser, rgb_values, brightness, colorData
-    colorData = {"Mode" : 1, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]),"Brightness": brightness, "Speed": 20}
+    colorData = {"M" : 1, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]),"Br": brightness, "S": 20}
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -68,7 +68,7 @@ def update_static_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     static_speed_var.set(int(value))
-    colorData = {"Mode" : 2, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Brightness": brightness, "Speed": int(value)}
+    colorData = {"M" : 2, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Br": brightness, "S": int(value)}
     file.save_json(colorData, "data.json")
 
 # Mise à jour de la vitesse de défilement RGB
@@ -76,7 +76,7 @@ def update_scroll_speed(value):
     global colorData, rgb_values, brightness
     # on met à jour la valeur de la variable
     scroll_speed_var.set(int(value))
-    colorData = {"Mode" : 3, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Brightness": brightness, "Speed": int(value)}
+    colorData = {"M" : 3, "R": int(rgb_values[0]), "G": int(rgb_values[1]), "B": int(rgb_values[2]), "Br": brightness, "S": int(value)}
     file.save_json(colorData, "data.json")
 
 def on_close():
@@ -290,7 +290,7 @@ screen_button.grid(row=0, column=0, padx=10, pady=5)
 def setCurrentScreen():
     global screen
     screen += 1 
-    if screen > 4:
+    if screen >= 4:
         screen = 0
 
 
@@ -555,7 +555,7 @@ def send_data():
                 screen_data = spotify_info
             elif screen == 3:
                 screen_data = network_info
-                clear = True
+                clear = False # test sinon True de base
             elif screen == 4:
                 screen_data = colorData
 

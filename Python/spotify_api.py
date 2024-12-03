@@ -87,60 +87,61 @@ def getSpotifyInfo():
     x_track = math.fabs(128 - ((6 * len(track_name) * 2) / 2) - 2 * 6)
 
     return {
-        "text": {
-            "color": {
+        "txt": {
+            "c": {
                 "R": 255,
                 "G": 255,
                 "B": 255
             },
-            "text": [
+            "txt": [
                 {
                     "x": x_artist,
                     "y": 142,
-                    "size": 2,
-                    "content": artist
+                    "s": 2,
+                    "c": artist
                 },
                 {
                     "x": x_track,
                     "y": 165,
-                    "size": 2,
-                    "content": track_name
+                    "s": 2,
+                    "c": track_name
                 },
                 {
                     "x": 128 - (6 * 11 * 2) / 2 - 2 * 6,
                     "y": 205,
-                    "size": 2,
-                    "content": f"{progress_min:02d}:{progress_sec:02d}/{duration_min:02d}:{duration_sec:02d}"
+                    "s": 2,
+                    "c": f"{progress_min:02d}:{progress_sec:02d}/{duration_min:02d}:{duration_sec:02d}"
                 }
             ]
         },
         "svg": [
             {
-                "path": f"M{45 + progress} 195 H192 Z M{45 + progress} 193 H195 Z M{45 + progress} 194 H195 Z M{45 + progress} 195 H195 Z",
-                "color": {
+                "p": f"M{45 + progress} 195 H192 Z M{45 + progress} 193 H195 Z M{45 + progress} 194 H195 Z M{45 + progress} 195 H195 Z",
+                "c": {
                     "R": 255,
                     "G": 255,
                     "B": 255
                 }
             },
             {
-                "path": f"M45 192 H{45 + progress} Z M45 193 H{45 + progress} Z M45 194 H{45 + progress} Z M45 195 H{45 + progress} Z",
-                "color": {
+                "p": f"M45 192 H{45 + progress} Z M45 193 H{45 + progress} Z M45 194 H{45 + progress} Z M45 195 H{45 + progress} Z",
+                "c": {
                     "R": 50,
                     "G": 156,
                     "B": 36
                 }
             },
             {
-                "path": "M63 41V92L97 127H144L180 96V44L147 17H98ZM141 98 L129 90H114L97 93 L95 87 L113 85H131L145 93ZM146 84 L132 76H112L96 77 L94 71 L112 69H134L150 78ZM153 67 L136 59H109L94 61 L90 54 L109 50H138L157 60 L153 67",
-                "color": {
+                "p": "M63 41V92L97 127H144L180 96V44L147 17H98ZM141 98 L129 90H114L97 93 L95 87 L113 85H131L145 93ZM146 84 L132 76H112L96 77 L94 71 L112 69H134L150 78ZM153 67 L136 59H109L94 61 L90 54 L109 50H138L157 60 L153 67",
+                "c": {
                     "R": 50,
                     "G": 156,
                     "B": 36
                 }
                 
             }
-        ]
+        ],
+        "svgC": bool(False)
     }
 
 '''{
