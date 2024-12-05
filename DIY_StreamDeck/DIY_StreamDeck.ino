@@ -23,11 +23,9 @@
 #define NB_LED 14
 #define PIN_LED 9
 
-#define DEG2RAD 0.0174532925
-
-const uint8_t MODE_STATIC = 1;
-const uint8_t MODE_SCROLLING_STATIC = 2;
-const uint8_t MODE_SCROLLING_RGB = 3;
+#define MODE_STATIC 1
+#define MODE_SCROLLING_STATIC 2
+#define MODE_SCROLLING_RGB 3
 
 // --- Objets globaux ---
 Adafruit_GC9A01A tft = Adafruit_GC9A01A(TFT_CS, TFT_DC, TFT_RST);
@@ -64,9 +62,15 @@ void writeText(uint8_t x, uint8_t y, uint8_t size, uint16_t color, char characte
   tft.println(character);
 }
 
+void writeText(uint8_t x, uint8_t y, uint8_t size, uint16_t color, const __FlashStringHelper* text) {
+  char buffer[20];
+  strcpy_P(buffer, (PGM_P)text);
+  writeText(x, y, size, color, buffer);
+}
+
 
 void startScreen() {
-  writeText(40, 115, 2, GC9A01A_WHITE, "Connection ...");
+  writeText(40, 115, 2, GC9A01A_WHITE, F("Connection ..."));
 
   value.r = 0, value.g = 0, value.b = 0;
   for (uint8_t i = 0; i < NB_LED; i++) {  // On parcour toute les leds pour les éteindre
@@ -235,14 +239,12 @@ void displayData(JsonObject data) {
     JsonObject textData = data["t"];
     uint16_t textColor = hexToColor565(textData["c"]);  // Couleur compactée
 
-    // Accéder directement aux éléments du texte sans créer un objet JSON
-    JsonArray textLines = textData["t"].as<JsonArray>();
-
-    for (JsonArray line : textLines) {
-      uint8_t x = line[0];
-      uint8_t y = line[1];
-      uint8_t size = line[2];
-      const char* content = line[3];
+    // Utilisation de .as() directement sans stocker dans un JsonArray
+    for (JsonVariant line : textData["t"].as<JsonArray>()) {
+      uint8_t x = line[0].as<uint8_t>();    // Récupérer les coordonnées
+      uint8_t y = line[1].as<uint8_t>();
+      uint8_t size = line[2].as<uint8_t>();
+      const char* content = line[3].as<const char*>();  // Pas d'allocation supplémentaire
 
       writeText(x, y, size, textColor, content);
     }
@@ -254,26 +256,26 @@ void displayData(JsonObject data) {
 
     if (data["vC"] == 1) tft.fillRect(0, 60, 240, 115, GC9A01A_BLACK);
 
-    // Itérer directement sur les éléments du tableau SVG
-    for (JsonArray svg : svgData) {
-      const char* path = svg[0];
-      uint16_t svgColor = hexToColor565(svg[1]);  // Couleur compactée
+    // Optimisation pour l'itération sur les éléments SVG sans création de variables inutiles
+    for (JsonVariant svg : svgData) {
+      const char* path = svg[0].as<const char*>();   // Récupérer le chemin SVG
+      uint16_t svgColor = hexToColor565(svg[1].as<const char*>());  // Convertir la couleur
+
       drawSVGPath(path, svgColor);
     }
   }
 }
 
 uint16_t hexToColor565(const char* hexColor) {
-  // Convertir la chaîne hexadécimale en un entier RGB
-  uint32_t rgb = strtol(&hexColor[0], NULL, 16);
+  // Optimisation pour la conversion de couleur hexadécimale
+  uint32_t rgb = strtol(hexColor, NULL, 16);  // Convertir la chaîne hexadécimale directement
 
-  // Extraire les composantes rouge, verte et bleue
-  uint8_t r = (rgb >> 16) & 0xFF;  // Rouge
-  uint8_t g = (rgb >> 8) & 0xFF;   // Vert
-  uint8_t b = rgb & 0xFF;          // Bleu
+  // Conversion directe sans allocations supplémentaires
+  uint8_t r = (rgb >> 16) & 0xFF;
+  uint8_t g = (rgb >> 8) & 0xFF;
+  uint8_t b = rgb & 0xFF;
 
-  // Convertir en format color565
-  return tft.color565(r, g, b);
+  return tft.color565(r, g, b);  // Retourner la couleur dans le format attendu
 }
 
 
@@ -282,7 +284,7 @@ void setup() {
   pinMode(BOUTON_PLAY, INPUT_PULLUP);
 
   // Initialisation de la communication série
-  Serial.begin(115200);
+  Serial.begin(2000000);
 
   // begin HID connection
   Consumer.begin();
@@ -294,6 +296,7 @@ void setup() {
 
   // On initialise l'ecran
   tft.begin();
+  tft.setSPISpeed(40000000);
   clearScreen();
 
   // Attente de la connexion au port série

@@ -83,7 +83,7 @@ def connectToArduino():
     try:
         if ser and ser.is_open:
             ser.close()
-        ser = serial.Serial(port, 115200)
+        ser = serial.Serial(port, 2000000)
     except serial.SerialException as e:
         print("Erreur lors de l'ouverture du port série:", e)
         return None
@@ -224,8 +224,8 @@ def getCPUInfo(cpu_temp_label):
                     str(round(float(last_process_count_cpu)))
                 ],
                 [
-                    92,
-                    112,
+                    90,
+                    110,
                     4,
                     "CPU"
                 ]
@@ -233,8 +233,8 @@ def getCPUInfo(cpu_temp_label):
         },
         "v": [
             [
-                "M73 87H175V160H73ZM78 92V155H170V92Z",
-                "FFFFFF"
+                "M161 86H85V161H161ZM188 132H164V140H188V154H164V166H152V191H137V166H131V191H115V166H108V191H95V166H82V154H58V140H82V132H58V118H82V109H58V96H82V84H95V60H108V84H115V60H131V84H137V60H152V84H164V96H188V109H164V118H188V132",
+                "0000FF"
             ]
         ],
         "vC": bool(False)
@@ -280,7 +280,7 @@ def getGPUInfo(gpu_temp_label):
                     str(float(last_memory_used_gpu)) + " Go"
                 ],
                 [
-                    92,
+                    90,
                     112,
                     4,
                     "GPU"
@@ -289,8 +289,8 @@ def getGPUInfo(gpu_temp_label):
             },
             "v": [
                 [
-                    "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "FFFFFF"
+                    "M151 155V161H111V155H151ZM91 155H103V161H91V155ZM66 110V137H60V110H66ZM67 94H183V111L178 115V150L172 153H67V94M66 100H59V101H66V109H59V138H66V146H59V148H66V161H67V155H88V162H104V155H110V162H153V155H172L179 151V116L184 111V91H67V85H51V87H66V100Z",
+                    "FF0000"
                 ]
             ],
             "vC": bool(False)
@@ -390,7 +390,8 @@ def sendToArduino(screen_data, vol, color, clear):
             connexion_label.pack(side="top")  # Show the label
             connectToArduino()
         elif ser.is_open:
-            ser.write((json_data + '\n').encode())
+            #ser.write((json_data + '\n').encode())
+            print("\nNombre d'octets envoyés:", ser.write((json_data + '\n').encode()))
         else:
             print("Le port série n'est pas ouvert.")
     except serial.SerialException as e:
@@ -398,6 +399,7 @@ def sendToArduino(screen_data, vol, color, clear):
         connexion_label.pack(side="top")  # Show the label
         connectToArduino()
     #print("\nDonnées envoyées à l'Arduino:", json_data + "\n")
+    # On affiche le nombre d'octets envoyés
 
 # Affiche ce que l'Arduino envoie sur le port série
 def readSerial():
