@@ -83,7 +83,7 @@ def connectToArduino():
     try:
         if ser and ser.is_open:
             ser.close()
-        ser = serial.Serial(port, 2000000)
+        ser = serial.Serial(port, 115200)
     except serial.SerialException as e:
         print("Erreur lors de l'ouverture du port série:", e)
         return None
@@ -376,7 +376,6 @@ def sendToArduino(screen_data, vol, color, clear):
 
     data = {
         "s": screen_data,
-        "v": vol,
         "c": color,
         "clr": bool(clear)
     }

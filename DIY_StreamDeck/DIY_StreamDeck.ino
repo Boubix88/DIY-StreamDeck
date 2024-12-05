@@ -282,7 +282,7 @@ void setup() {
   pinMode(BOUTON_PLAY, INPUT_PULLUP);
 
   // Initialisation de la communication série
-  Serial.begin(2000000);
+  Serial.begin(115200);
 
   // begin HID connection
   Consumer.begin();
@@ -324,35 +324,48 @@ void drawSVGPath(const char* svgPath, uint16_t color) {
   const char* p = svgPath;
   while (*p) {
     char cmd = *p++;  // Lire la commande
+    skipSeparators(p);
 
-    // Ignorer les séparateurs
-    while (*p == ' ' || *p == ',') p++;
-
-    if (cmd == 'M') {  // MoveTo
-      x = strtol(p, &p, 10);
-      y = strtol(p, &p, 10);
-      xStart = x;
-      yStart = y;
-      //tft.drawPixel(x, y, color);
-    } else if (cmd == 'L') {  // LineTo
-      uint8_t x1 = strtol(p, &p, 10);
-      uint8_t y1 = strtol(p, &p, 10);
-      tft.drawLine(x, y, x1, y1, color);
-      x = x1;
-      y = y1;
-    } else if (cmd == 'H') {  // Ligne horizontale
-      uint8_t x1 = strtol(p, &p, 10);
-      tft.drawFastHLine(x, y, x1 - x, color);
-      x = x1;
-    } else if (cmd == 'V') {  // Ligne verticale
-      uint8_t y1 = strtol(p, &p, 10);
-      tft.drawFastVLine(x, y, y1 - y, color);
-      y = y1;
-    } else if (cmd == 'Z') {  // ClosePath
-      tft.drawLine(x, y, xStart, yStart, color);
-      x = xStart;
-      y = yStart;
+    switch (cmd) {
+      case 'M': {  // MoveTo
+        x = strtol(p, &p, 10);
+        y = strtol(p, &p, 10);
+        xStart = x;
+        yStart = y;
+        break;
+      }
+      case 'L': {  // LineTo
+        uint8_t x1 = strtol(p, &p, 10);
+        uint8_t y1 = strtol(p, &p, 10);
+        tft.drawLine(x, y, x1, y1, color);
+        x = x1;
+        y = y1;
+        break;
+      }
+      case 'H': {  // Ligne horizontale
+        uint8_t x1 = strtol(p, &p, 10);
+        tft.drawFastHLine(x, y, x1 - x, color);
+        x = x1;
+        break;
+      }
+      case 'V': {  // Ligne verticale
+        uint8_t y1 = strtol(p, &p, 10);
+        tft.drawFastVLine(x, y, y1 - y, color);
+        y = y1;
+        break;
+      }
+      case 'Z': {  // ClosePath
+        tft.drawLine(x, y, xStart, yStart, color);
+        x = xStart;
+        y = yStart;
+        break;
+      }
     }
-    while (*p == ' ' || *p == ',') p++;  // Sauter les séparateurs
+
+    skipSeparators(p);  // Nettoyer les séparateurs pour la prochaine commande
   }
+}
+
+void skipSeparators(const char*& p) {
+  while (*p == ' ' || *p == ',') p++;
 }

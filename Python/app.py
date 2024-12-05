@@ -659,7 +659,6 @@ def send_data():
                     pass
                 case const_screen.NETWORK_INFO:
                     screen_data = network_info
-                    clear = False # test sinon True de base
                     last_screen = screen
                     pass
                 case const_screen.VOLUME_INFO:
