@@ -16,6 +16,7 @@ from OpenHardwareMonitor.Hardware import Computer
 from OpenHardwareMonitor.Hardware import SensorType
 import json
 import psutil
+import math
 
 # Main
 old_volume = 0
@@ -229,14 +230,14 @@ def getCPUInfo(cpu_temp_label):
                     "CPU"
                 ]
             ]
-            },
-            "v": [
-                [
-                    "M73 87H175V160H73ZM78 92V155H170V92Z",
-                    "FFFFFF"
-                ]
-            ],
-            "vC": bool(False)
+        },
+        "v": [
+            [
+                "M73 87H175V160H73ZM78 92V155H170V92Z",
+                "FFFFFF"
+            ]
+        ],
+        "vC": bool(False)
         }
 
 # On récupère les informations du GPU
@@ -295,6 +296,59 @@ def getGPUInfo(gpu_temp_label):
             "vC": bool(False)
         }
 
+def generate_volume_path(volume, center_x=120, center_y=120, radius_outer=120, radius_inner=105, total_bars=13):
+    path_commands_active = []  # Liste des commandes SVG
+    path_commands_inactive = []  # Liste des commandes SVG
+    active_bars = max(0, min(total_bars, int(volume * total_bars / 100)))  # Calculer combien de barres sont actives en fonction du volume
+
+    for i in range(total_bars):
+        # Angle pour chaque barre
+        angle = (2 * math.pi / total_bars) * i + math.pi / 2
+
+        # Calcul des points en coordonnées polaires -> cartésiennes
+        x_outer = round(center_x + radius_outer * math.cos(angle))
+        y_outer = round(center_y + radius_outer * math.sin(angle))
+        x_inner = round(center_x + radius_inner * math.cos(angle))
+        y_inner = round(center_y + radius_inner * math.sin(angle))
+
+        # Ajouter les barres actives uniquement
+        if i < active_bars:
+            path_commands_active.append(f"M {x_inner} {y_inner} L {x_outer} {y_outer}")
+        else:
+            path_commands_inactive.append(f"M {x_inner} {y_inner} L {x_outer} {y_outer}") # Lignes 
+            #path_commands_inactive.append(f"M {x_inner} {y_inner} L {x_inner} {y_outer}") # Points
+
+        '''print("Volume:", round(volume), "Active bars:", ' '.join(path_commands_active) + "Z")
+        print("\nInactive bars:", ' '.join(path_commands_inactive) + "Z")'''
+
+    return {
+        "t": {
+            "c": "FFFFFF",
+            "t": [
+                [
+                    120 - (len(str(volume)) * (6 * 7)) / 2,
+                    150,
+                    7,
+                    str(volume)
+                ]
+            ]
+        },
+        "v": [
+            [
+                "M145 35 L147 35 L150 39 V132L148 133 L146 134 L134 130 L118 116 L108 103V69L116 56 L129 42Z M83 64 H102 V108 H83V64",
+                "FFFFFF"
+            ],
+            [
+                ' '.join(path_commands_inactive) + 'Z',
+                "808080"
+            ],
+            [
+                ' '.join(path_commands_active) + 'Z',
+                "0000FF"
+            ]
+        ],
+        "vC": bool(False)
+    }
 
 # On récupère le volume du système
 def get_system_volume():
@@ -302,7 +356,8 @@ def get_system_volume():
     interface = devices.Activate(
         IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     volume = cast(interface, POINTER(IAudioEndpointVolume))
-    return volume.GetMasterVolumeLevelScalar() * 100
+
+    return round(volume.GetMasterVolumeLevelScalar() * 100)
 
 def isPlayPausePressed():
     # On vérifie si un evenement touche play/pause pressée est arrivé sur le pc
@@ -312,7 +367,7 @@ def isPlayPausePressed():
 # Envoie le volume à l'Arduino
 def getVolume():
     current_volume = get_system_volume()
-    return str(round(current_volume))
+    return str(current_volume)
 
 
 # Envoie les données à l'Arduino
@@ -343,7 +398,7 @@ def sendToArduino(screen_data, vol, color, clear):
         print("Erreur lors de l'envoi des données à l'Arduino:", e)
         connexion_label.pack(side="top")  # Show the label
         connectToArduino()
-    print("Données envoyées à l'Arduino:", json_data)
+    #print("\nDonnées envoyées à l'Arduino:", json_data + "\n")
 
 # Affiche ce que l'Arduino envoie sur le port série
 def readSerial():

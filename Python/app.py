@@ -14,6 +14,8 @@ from spotify_api import get_current_playback, getSpotifyInfo  # Remplacez par le
 import requests
 import time
 import network as net
+import types
+import json
 
 
 # Initialisation des variables globales pour les valeurs RVB et la luminosité depuis le JSON
@@ -24,6 +26,18 @@ color_speed = colorData[5]  # Vitesse de défilement RGB initiale
 
 screen = 0
 last_screen = 0
+old_volume = 0
+timer_volume_screen = 0.0
+start_timer_volume_screen = 0.0
+changed_volume = False
+
+# On définit les constantes pour les ecrans
+const_screen = types.SimpleNamespace()
+const_screen.CPU_INFO = 0
+const_screen.GPU_INFO = 1
+const_screen.SPOTIFY_INFO = 2
+const_screen.NETWORK_INFO = 3
+const_screen.VOLUME_INFO = 4
 
 # Fonction pour convertir les valeurs RVB en format hexadécimal
 def rgb_to_hex(r, g, b):
@@ -289,7 +303,7 @@ screen_button.grid(row=0, column=0, padx=10, pady=5)
 def setCurrentScreen():
     global screen
     screen += 1 
-    if screen >= 4:
+    if screen >= 5:
         screen = 0
 
 
@@ -520,11 +534,92 @@ for i in range(3):  # For each row
 
 
 
+
+# ========================================= Affichage de l'écran ========================================= #
+# Fonction pour convertir les chemins SVG en coordonnées tkinter
+def svg_to_tkinter_coords(svg_path):
+        coords = []
+        x, y = 0, 0
+        x_start, y_start = 0, 0
+
+        i = 0
+        while i < len(svg_path):
+            cmd = svg_path[i]
+            i += 1
+
+            while i < len(svg_path) and (svg_path[i] == ' ' or svg_path[i] == ','):
+                i += 1
+
+            if cmd == 'M':  # MoveTo
+                x = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                    print("\nY: ", svg_path[i] + "\n")
+                y = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                x_start, y_start = x, y
+                coords.append((x, y))
+            elif cmd == 'L':  # LineTo
+                x1 = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                y1 = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                coords.append((x1, y1))
+                x, y = x1, y1
+            elif cmd == 'H':  # Horizontal Line
+                x1 = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                coords.append((x1, y))
+                x = x1
+            elif cmd == 'V':  # Vertical Line
+                y1 = int(svg_path[i])
+                while i < len(svg_path) and svg_path[i].isdigit():
+                    i += 1
+                coords.append((x, y1))
+                y = y1
+            elif cmd == 'Z':  # ClosePath
+                coords.append((x_start, y_start))
+                x, y = x_start, y_start
+
+            while i < len(svg_path) and (svg_path[i] == ' ' or svg_path[i] == ','):
+                i += 1
+
+        return coords
+    
+# Fonction pour mettre à jour l'affichage de l'écran
+def update_display(data):
+    # Effacez l'écran
+    canvas.delete("all")
+
+    # Affichage des textes
+    for item in data["t"]["t"]:
+        canvas.create_text(item[0], item[1], text=item[3], font=("Helvetica", item[2]*6), fill="#" + data["t"]["c"])
+
+    # Affichage des svg
+    for item in data["v"]:
+        svg_path = item[0]
+        color = "#" + item[1]
+        coords = svg_to_tkinter_coords(svg_path)
+        print("SVG : ", coords)
+        canvas.create_polygon(coords, fill=color)
+    print("Test: ",data["v"])
+
+
+# Créez un canvas pour afficher l'écran
+canvas = Canvas(app, width=240, height=240, bg="black")
+canvas.pack()
+
+
+
 # ========================================= Envoi des données ========================================= #
 # Fonction pour gérer l'envoi des données à l'Arduino
 def send_data():
     global ser
-    global colorData, screen, last_screen
+    global colorData, screen, last_screen, old_volume, timer_volume_screen, start_timer_volume_screen, changed_volume
 
     while True:
         try:
@@ -535,34 +630,82 @@ def send_data():
             else:
                 clear = False
             
-            cpu_info = sd.getCPUInfo(cpu_temp_label)
-            gpu_info = sd.getGPUInfo(gpu_temp_label)
             _,_,_,_,_,_,_,clear = get_current_playback()
-            spotify_info = getSpotifyInfo()
-            network_info = net.getNetworkInfo()
-            #clear = True
-            vol = sd.getVolume()
-
+            vol = sd.get_system_volume()
             sd.readSerial()
 
+            # Get all screen
+            cpu_info = sd.getCPUInfo(cpu_temp_label)
+            gpu_info = sd.getGPUInfo(gpu_temp_label)
+            spotify_info = getSpotifyInfo()
+            network_info = net.getNetworkInfo()
+            volume_info = sd.generate_volume_path(vol)
+
+            clear = last_screen != screen and not changed_volume
+                
             screen_data = None
-            if screen == 0:
-                screen_data = cpu_info
-            elif screen == 1:
-                screen_data = gpu_info
-            elif screen == 2:
-                screen_data = spotify_info
-            elif screen == 3:
-                screen_data = network_info
-                clear = False # test sinon True de base
-            elif screen == 4:
-                screen_data = colorData
+            match screen:
+                case const_screen.CPU_INFO:
+                    screen_data = cpu_info
+                    last_screen = screen
+                    pass
+                case const_screen.GPU_INFO:
+                    screen_data = gpu_info
+                    last_screen = screen
+                    pass
+                case const_screen.SPOTIFY_INFO:
+                    screen_data = spotify_info
+                    last_screen = screen
+                    pass
+                case const_screen.NETWORK_INFO:
+                    screen_data = network_info
+                    clear = False # test sinon True de base
+                    last_screen = screen
+                    pass
+                case const_screen.VOLUME_INFO:
+                    screen_data = volume_info
+                    if not changed_volume:
+                        last_screen = screen
+                    pass
+                case _:
+                    screen_data = None
+                    pass
 
-            if last_screen != screen:
+            actual_time = time.time()
+
+            # Check if the volume has changed
+            if vol != old_volume and screen != const_screen.VOLUME_INFO:
+                screen = const_screen.VOLUME_INFO  # Set screen to volume screen
+                start_timer_volume_screen = actual_time
+                timer_volume_screen = actual_time - start_timer_volume_screen
+                changed_volume = True
                 clear = True
-                last_screen = screen
+            elif changed_volume and timer_volume_screen < 3.0:
+                if screen != const_screen.VOLUME_INFO:
+                    timer_volume_screen = 0.0
+                    start_timer_volume_screen = 0.0
+                    screen = last_screen
+                    changed_volume = False
+                    clear = True
+                else :
+                    screen = const_screen.VOLUME_INFO  # Set screen to volume screen
+                    timer_volume_screen = actual_time - start_timer_volume_screen
 
-            sd.sendToArduino(screen_data, vol, colorData, clear) # On envoie les données à l'Arduino
+            old_volume = vol
+
+            # Check if the volume screen has been displayed for more than 3 seconds and reset the screen
+            if timer_volume_screen > 3.0:
+                timer_volume_screen = 0.0
+                start_timer_volume_screen = 0.0
+                screen = last_screen
+                changed_volume = False
+                clear = True
+
+            # Mettez à jour l'affichage avec les données JSON
+            #update_display(screen_data)
+
+            # On envoie les données à l'Arduino
+            sd.sendToArduino(screen_data, vol, colorData, clear) 
         except (OSError):
             print("Erreur lors de la connexion à l'Arduino.")
             #messagebox.showinfo("Erreur", "En attente de connexion ...")
@@ -598,6 +741,7 @@ def main():
     sd.start_cpu_thread()  # Démarre le thread pour la lecture des infos CPU
     sd.start_gpu_thread()  # Démarre le thread pour la lecture des infos GPU
     net.start_network_thread() # Démarre le thread pour la lecture des infos réseau
+    old_volume = sd.get_system_volume()  # Get the system volume
 
     # Créez un thread pour envoyer les données à l'Arduino
     send_data_thread = threading.Thread(target=send_data)
