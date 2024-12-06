@@ -186,14 +186,14 @@ def read_gpu_info():
 
 # On récupère les informations du CPU
 #def getCPUInfo(cpu_temp_label, cpu_usage_label, cpu_frequency_label, cpu_process_count_label):
-def getCPUInfo(cpu_temp_label):
+def getCPUInfo(cpu_temp_label, cpu_usage_label, cpu_frequency_label, cpu_process_count_label):
     global last_cpu_temp, last_usage_cpu, last_frequency_cpu, last_process_count_cpu
 
     # On ecrit les valeurs dans les labels
     cpu_temp_label.configure(text=str(last_cpu_temp) + " °C")
-    '''cpu_usage_label.configure(text=str(last_usage_cpu) + " %")
+    cpu_usage_label.configure(text=str(round(last_usage_cpu)) + " %")
     cpu_frequency_label.configure(text=str(last_frequency_cpu) + " GHz")
-    cpu_process_count_label.configure(text=str(last_process_count_cpu))'''
+    cpu_process_count_label.configure(text=str(last_process_count_cpu))
 
     return {
         "t": {
@@ -242,14 +242,14 @@ def getCPUInfo(cpu_temp_label):
 
 # On récupère les informations du GPU
 #def getGPUInfo(gpu_temp_label, gpu_usage_label, gpu_frequency_label, gpu_memory_label):
-def getGPUInfo(gpu_temp_label):
+def getGPUInfo(gpu_temp_label, gpu_usage_label, gpu_frequency_label, gpu_memory_label):
     global last_gpu_temp, last_usage_gpu, last_frequency_gpu, last_memory_used_gpu
 
     # On ecrit les valeurs dans les labels
     gpu_temp_label.configure(text=str(last_gpu_temp) + " °C")
-    '''gpu_usage_label.configure(text=str(last_usage_gpu) + " %")
-    gpu_frequency_label.configure(text=str(last_frequency_gpu) + " MHz")
-    gpu_memory_label.configure(text=str(last_memory_used_gpu) + " MB")'''
+    gpu_usage_label.configure(text=str(last_usage_gpu) + " %")
+    gpu_frequency_label.configure(text=str(last_frequency_gpu) + " GHz")
+    gpu_memory_label.configure(text=str(last_memory_used_gpu) + " MB")
 
     return {
         "t": {

@@ -5,3 +5,7 @@ Python/.cache
 Python/assignments.json
 Python/data.json
 Python/OpenHardwareMonitorLib.sys
+Python/build
+Python/temp_icons
+Python/View/__pycache__
+Python/data.json
