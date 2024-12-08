@@ -15,8 +15,11 @@ def create_rgb_view(app):
     color_speed = colorData[5]  # Vitesse de défilement RGB initiale
 
     # Création de l'écran d'accueil avec le TabView sur la gauche
-    tab_view = customtkinter.CTkTabview(app, width=400, height=250)
-    tab_view.place(x=460, y=300)
+    tab_view = customtkinter.CTkTabview(app, width=300, height=230)
+    tab_view.place(x=325, y=245)
+
+    # Configure the grid to ensure the frame has a minimum size
+    tab_view.grid_propagate(False)
 
     # Onglet "Defilement RGB"
     scrolling_rgb_tab = tab_view.add("Defilement RGB")
@@ -62,23 +65,23 @@ def create_rgb_view(app):
     slider_vars = []  # Stocke les variables pour les valeurs des sliders
     for i, color in enumerate(["Rouge", "Vert", "Bleu"]):
         label = customtkinter.CTkLabel(fixed_color_tab, text=color)
-        label.grid(row=i+1, column=0, padx=10, pady=5)
+        label.grid(row=i+1, column=0, padx=0, pady=0)
 
         var = customtkinter.IntVar()  # Variable pour la valeur du slider
         var.set(255)  # Initialisation à 255
         slider = CTkSlider(fixed_color_tab, from_=0, to=255, number_of_steps=255, command=lambda value, var=var, i=i: update_rgb(i, value, var))
         slider.set(rgb_values[i])  # Initialisation à 255
-        slider.grid(row=i+1, column=1, columnspan=2, padx=10, pady=5)
+        slider.grid(row=i+1, column=1, columnspan=2, padx=0, pady=0)
         rgb_sliders.append(slider)
 
-        value_label = customtkinter.CTkLabel(fixed_color_tab, textvariable=var)  # Étiquette pour la valeur du slider
-        value_label.grid(row=i+1, column=3, padx=5, pady=5)
+        '''value_label = customtkinter.CTkLabel(fixed_color_tab, textvariable=var)  # Étiquette pour la valeur du slider
+        value_label.grid(row=i+1, column=3, padx=0, pady=0)
         slider_labels.append(value_label)  # Ajoute l'étiquette à la liste
-        slider_vars.append(var)  # Ajoute la variable à la liste
+        slider_vars.append(var)  # Ajoute la variable à la liste'''
 
     # Slider luminosité
     brightness_label = customtkinter.CTkLabel(fixed_color_tab, text="Luminosité")  # Label pour la luminosité
-    brightness_label.grid(row=4, column=0, padx=10, pady=5)
+    brightness_label.grid(row=4, column=0, padx=0, pady=0)
 
     brightness_var = customtkinter.IntVar()  # Variable pour la valeur du slider de luminosité
     brightness_var.set(brightness)  # Initialisation à 0

@@ -10,8 +10,11 @@ def create_spotify_view(app):
     global track_label, artist_label, progress_label, progress_bar, album_label
 
     # Créez une tab view
-    spotify_frame = customtkinter.CTkFrame(app, width=300, height=150)
-    spotify_frame.place(x=240, y=300)
+    spotify_frame = customtkinter.CTkFrame(app, width=310, height=150)
+    spotify_frame.place(x=5, y=325)
+
+    # Configure the grid to ensure the frame has a minimum size
+    spotify_frame.grid_propagate(False)
 
     # Add the label for the title
     spotify_label = customtkinter.CTkLabel(spotify_frame, text="Spotify", font=("Arial", 16))

@@ -12,6 +12,9 @@ import View.SpotifyView as SpotifyView
 import View.RgbView as RgbView
 import View.KeysView as KeysView
 import View.DisplayView as DisplayView
+import View.NetworkView as NetworkView
+import View.RamView as RamView
+
 
 last_screen = 0
 old_volume = 0
@@ -29,13 +32,15 @@ const_screen.VOLUME_INFO = 4
 
 
 def on_close():
+    sd.stop_threads()  # Arrête les threads avant de fermer l'application
+
     # Ajoutez ici le code que vous souhaitez exécuter avant la fermeture de l'application
     print("L'application se ferme.")
 
     try:
         sd.closeConnection()
         pass
-    except (OSError, System.NullReferenceException, System.AccessViolationException):  # Fix: Replace "NullReferenceError" with "ReferenceError"
+    except (OSError, ReferenceError):  # Fix: Replace "NullReferenceError" with "ReferenceError"
         print("Erreur lors de la fermeture de la connexion.")
         pass
 
@@ -47,7 +52,7 @@ def on_close():
 # Création de la fenêtre principale
 app = customtkinter.CTk()
 app.title('DIY StreamDeck')
-app.geometry("1000x450")
+app.geometry("860x480")
 app.iconbitmap("assets/icon.ico")
 app.protocol("WM_DELETE_WINDOW", on_close)
 
@@ -64,6 +69,14 @@ cpu_temp_label, cpu_usage_label, cpu_frequency_label, cpu_process_count_label = 
 gpu_temp_label, gpu_usage_label, gpu_frequency_label, gpu_memory_label = GpuView.create_gpu_view(app)
 
 
+# ================================= Ajout des infos réseau ========================================= #
+network_download_label, network_upload_label = NetworkView.create_network_view(app)
+
+
+# ======================================Ajout des infos RAM ========================================= #
+ram_usage_label = RamView.create_ram_view(app)
+
+
 # ======================================= Ajout des touches ========================================= #
 KeysView.create_keys_view(app)
 
@@ -74,6 +87,8 @@ SpotifyView.create_spotify_view(app)
 
 # ===================================== Affichage de l'écran ======================================== #
 DisplayView.create_display_view(app)
+
+
 
 
 # ======================================= Envoi des données ========================================= #
@@ -93,17 +108,19 @@ def send_data():
             sd.readSerial()
 
             colorData = RgbView.get_color_data()
+            sd.getRamInfo(ram_usage_label)
 
             # Get all screen
             screen = DisplayView.getCurrentScreen()
             cpu_info = sd.getCPUInfo(cpu_temp_label, cpu_usage_label, cpu_frequency_label, cpu_process_count_label)
             gpu_info = sd.getGPUInfo(gpu_temp_label, gpu_usage_label, gpu_frequency_label, gpu_memory_label)
             spotify_info = getSpotifyInfo()
-            network_info = net.getNetworkInfo()
+            network_info = net.getNetworkInfo(network_download_label, network_upload_label)
             volume_info = sd.generate_volume_path(vol)
 
             clear = last_screen != screen and not changed_volume
                 
+            # Get the data for the current screen
             screen_data = None
             match screen:
                 case const_screen.CPU_INFO:
@@ -183,6 +200,7 @@ def send_data():
 
 
 
+
 # ========================================= Programme principal ========================================= #
 # Main du programme
 def main():
@@ -213,7 +231,6 @@ def main():
     display_spotify_data.start()
 
     app.mainloop()  # Lance l'interface graphique
-
 
 
 if __name__ == "__main__":

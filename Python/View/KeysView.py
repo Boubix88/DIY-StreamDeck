@@ -19,8 +19,11 @@ def create_keys_view(app):
     assignments = file.load_json_assignement("assignments.json")
 
     # Create a tab view
-    keys_frame = customtkinter.CTkFrame(app, width=300, height=250)
-    keys_frame.place(x=270, y=5)
+    keys_frame = customtkinter.CTkFrame(app, width=300, height=240)
+    keys_frame.place(x=325, y=5)
+
+    # Configure the grid to ensure the frame has a minimum size
+    keys_frame.grid_propagate(False)
 
     # Add the frame to the tab view as a new tab
     keys_label = customtkinter.CTkLabel(keys_frame, text="Assignations des touches", font=("Arial", 16))

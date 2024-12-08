@@ -370,6 +370,15 @@ def getVolume():
     return str(current_volume)
 
 
+def getRamInfo(ram_usage_label):
+    ram = psutil.virtual_memory()
+    ram_usage = ram.percent
+    ram_usage_label.configure(text=f"{ram_usage}%")
+    ram_total = ram.total / (1024 ** 3)  # Convert to GB
+    ram_used = ram.used / (1024 ** 3)  # Convert to GB
+    ram_usage_label.configure(text=f"{ram_used:.1f}/{ram_total:.1f}")
+
+
 # Envoie les données à l'Arduino
 def sendToArduino(screen_data, vol, color, clear):
     global ser, connexion_label
@@ -425,3 +434,8 @@ def start_gpu_thread():
     temp_thread = threading.Thread(target=read_gpu_info, args=())
     temp_thread.daemon = True
     temp_thread.start()
+
+def stop_threads():
+    global keep_reading_cpu, keep_reading_gpu
+    keep_reading_cpu = False
+    keep_reading_gpu = False

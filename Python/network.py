@@ -110,9 +110,14 @@ def getSVGPaths():
 
     grid_svg = generate_grid(duration)
 
+    # On arrondi les valeurs des svg
+    download_paths_svg = [path.replace('.0 ', ' ') for path in download_paths_svg]
+    upload_paths_svg = [path.replace('.0 ', ' ') for path in upload_paths_svg]
+    grid_svg = [path.replace('.0 ', ' ') for path in grid_svg]
+
     return download_paths_svg[1:], upload_paths_svg[1:], grid_svg
 
-def getNetworkInfo():
+def getNetworkInfo(network_download_label, network_upload_label):
     download_paths_svg, upload_paths_svg, grid_svg = getSVGPaths()
     '''print("Download")
     for path in download_paths_svg:
@@ -132,6 +137,10 @@ def getNetworkInfo():
     else:
         download_speed = 0
         upload_speed = 0
+
+    # On met à jour les labels
+    network_download_label.configure(text="\u2193 " + str(round(download_speed, 2)) + " Mbps")
+    network_upload_label.configure(text="\u2191 " + str(round(upload_speed, 2)) + " Mbps")
 
     return {
         "t": {
@@ -173,6 +182,7 @@ def getNetworkInfo():
         ],
         "vC": bool(True)
     }
+
 
 def start_network_thread():
     temp_thread = threading.Thread(target=collect_network_data, args=())

@@ -7,8 +7,11 @@ from tkinter import PhotoImage
 
 def create_cpu_view(app):
     # Create a frame to display the CPU temperature
-    cpu_frame = customtkinter.CTkFrame(app, width=200, height=200)
+    cpu_frame = customtkinter.CTkFrame(app, width=150, height=150)
     cpu_frame.place(x=5, y=5)
+
+    # Configure the grid to ensure the frame has a minimum size
+    cpu_frame.grid_propagate(False)
 
     # Add the label for the title
     cpu_label = customtkinter.CTkLabel(cpu_frame, text="CPU", font=("Arial", 16))
