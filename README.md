@@ -31,6 +31,8 @@ DIY-StreamDeck est un projet de contrôleur de médias personnalisé pour Window
 
 ![Image du matériel](https://raw.githubusercontent.com/Boubix88/DIY-StreamDeck/master/Documentation/capture_materiel.jpg)
 
+![Image du diagramme](https://raw.githubusercontent.com/Boubix88/DIY-StreamDeck/master/Documentation/Schematic_DIY-Streamdeck.png)
+
 ## Comment ça marche
 
 Le DIY-StreamDeck est conçu pour être facile à utiliser. Il suffit d'assigner les touches mécaniques à vos logiciels préférés depuis l'interface du logiciel, et vous pouvez ensuite les lancer directement depuis le StreamDeck. L'écran rond affiche les températures du CPU et du GPU, ou le volume lorsque vous le changez.
