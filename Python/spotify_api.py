@@ -4,6 +4,7 @@ from spotipy.oauth2 import SpotifyOAuth
 import requests
 from dotenv import load_dotenv
 import math
+from requests.exceptions import HTTPError
 
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
@@ -13,14 +14,27 @@ CLIENT_ID = os.getenv('CLIENT_ID')
 CLIENT_SECRET = os.getenv('CLIENT_SECRET')
 REDIRECT_URI = os.getenv('REDIRECT_URI')
 
+print(f"CLIENT_ID: {CLIENT_ID}")
+print(f"CLIENT_SECRET: {CLIENT_SECRET}")
+print(f"REDIRECT_URI: {REDIRECT_URI}")
+
 # Scopes nécessaires pour accéder aux informations de lecture
 scope = 'user-read-playback-state'
 
 # Authentification
-sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=CLIENT_ID,
-                                               client_secret=CLIENT_SECRET,
-                                               redirect_uri=REDIRECT_URI,
-                                               scope=scope))
+try:
+    sp_oauth = SpotifyOAuth(client_id=CLIENT_ID,
+                            client_secret=CLIENT_SECRET,
+                            redirect_uri=REDIRECT_URI,
+                            scope=scope)
+    sp = spotipy.Spotify(auth_manager=sp_oauth)
+    print("Authentication successful")
+except Exception as e:
+    print(f"Error during authentication: {e}")
+    cache_path = sp.cache_path
+    if os.path.exists(cache_path):
+        os.remove(cache_path)
+        print(f"Deleted cache file: {cache_path}")
 
 # Variable globale pour stocker l'URL de l'image de l'album
 current_album_image_url = None
@@ -29,13 +43,26 @@ def clear_console():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def get_current_playback():
-    global current_album_image_url
-    current_playback = sp.current_playback()
+    global current_album_image_url, sp
+    try:
+        current_playback = sp.current_playback()
+    except HTTPError as e:
+        if e.response.status_code == 400:
+            print("Failed to refresh access token. Re-authenticating...")
+            try:
+                token_info = sp.refresh_access_token(sp.cache_handler.get_cached_token()['refresh_token'])
+                sp = spotipy.Spotify(auth=token_info['access_token'])
+                current_playback = sp.current_playback()
+            except Exception as e:
+                print(f"Error during re-authentication: {e}")
+                return "", "", 0, 0, 0, 0, None, False
+        else:
+            raise e
 
     if current_playback is not None and current_playback['is_playing']:
         track = current_playback.get('item')
         if track is None:
-            return None, None, None, None, None, None, None, False
+            return "", "", 0, 0, 0, 0, None, False
 
         artist = track['artists'][0]['name']
         track_name = track['name']

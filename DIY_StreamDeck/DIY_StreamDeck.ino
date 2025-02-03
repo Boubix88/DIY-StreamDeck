@@ -11,13 +11,14 @@
 #include <WS2812.h>
 
 // --- Définition des constantes et types ---
-#define BOUTON_PLAY 2
-#define BOUTON_PREVIOUS 3
-#define BOUTON_NEXT 4
-#define PLAY 0x78
+#define BOUTON_KEYS A1
+#define BOUTON_SCREEN 6
+#define BOUTON_VOL_UP 3
+#define BOUTON_VOL_DOWN 2
+#define NB_BUTTONS 4
 
 #define TFT_DC 7
-#define TFT_CS 10
+#define TFT_CS 10 //14
 #define TFT_RST 8
 
 #define NB_LED 14
@@ -279,9 +280,84 @@ uint16_t hexToColor565(const char* hexColor) {
 }
 
 
+
+void drawSVGPath(const char* svgPath, uint16_t color) {
+  uint8_t x = 0, y = 0;            // Position actuelle
+  uint8_t xStart = 0, yStart = 0;  // Point de départ pour fermer le chemin
+
+  const char* p = svgPath;
+  while (*p) {
+    char cmd = *p++;  // Lire la commande
+    skipSeparators(p);
+
+    switch (cmd) {
+      case 'H': {  // Ligne horizontale
+        uint8_t x1 = strtol(p, &p, 10);
+        tft.drawFastHLine(x, y, x1 - x, color);
+        x = x1;
+        break;
+      }
+      case 'V': {  // Ligne verticale
+        uint8_t y1 = strtol(p, &p, 10);
+        tft.drawFastVLine(x, y, y1 - y, color);
+        y = y1;
+        break;
+      }
+      case 'L': {  // LineTo
+        uint8_t x1 = strtol(p, &p, 10);
+        uint8_t y1 = strtol(p, &p, 10);
+        tft.drawLine(x, y, x1, y1, color);
+        x = x1;
+        y = y1;
+        break;
+      }
+      case 'M': {  // MoveTo
+        x = strtol(p, &p, 10);
+        y = strtol(p, &p, 10);
+        xStart = x;
+        yStart = y;
+        break;
+      }
+      case 'Z': {  // ClosePath
+        tft.drawLine(x, y, xStart, yStart, color);
+        x = xStart;
+        y = yStart;
+        break;
+      }
+    }
+
+    skipSeparators(p);  // Nettoyer les séparateurs pour la prochaine commande
+  }
+}
+
+void skipSeparators(const char*& p) {
+  while (*p == ' ' || *p == ',') p++;
+}
+
+void checkBtnPressed() {
+  if (digitalRead(BOUTON_SCREEN) == LOW) {
+    // On change d'ecran
+    Serial.println(F("screen_change"));
+  }
+
+  if (digitalRead(BOUTON_VOL_UP) == LOW) {
+    Consumer.write(MEDIA_VOLUME_UP);
+    return;
+  }
+  
+  if (digitalRead(BOUTON_VOL_DOWN) == LOW) {
+    Consumer.write(MEDIA_VOLUME_DOWN);
+    return;
+  }
+
+  uint16_t key = analogRead(BOUTON_KEYS);
+}
+
 void setup() {
-  // Initialisation du bouton 1
-  pinMode(BOUTON_PLAY, INPUT_PULLUP);
+  // Initialisation des boutons
+  pinMode(BOUTON_SCREEN, INPUT_PULLUP);
+  pinMode(BOUTON_VOL_UP, INPUT_PULLUP);
+  pinMode(BOUTON_VOL_DOWN, INPUT_PULLUP);
 
   // Initialisation de la communication série
   Serial.begin(2000000);
@@ -306,69 +382,9 @@ void setup() {
 }
 
 void loop() {
-  // Bouton PLAY/PAUSE
-  if (digitalRead(BOUTON_PLAY) == LOW) {
-    //Serial.println("Play/Pause");
-
-    // On envoi la commande
-    Consumer.write(MEDIA_PLAY_PAUSE);
-
-    delay(200);
-  }
+  // Boutons
+  checkBtnPressed();
 
   // On recoit des données donc on affiche le volume
   processReceivedData();
-}
-
-void drawSVGPath(const char* svgPath, uint16_t color) {
-  uint8_t x = 0, y = 0;            // Position actuelle
-  uint8_t xStart = 0, yStart = 0;  // Point de départ pour fermer le chemin
-
-  const char* p = svgPath;
-  while (*p) {
-    char cmd = *p++;  // Lire la commande
-    skipSeparators(p);
-
-    switch (cmd) {
-      case 'M': {  // MoveTo
-        x = strtol(p, &p, 10);
-        y = strtol(p, &p, 10);
-        xStart = x;
-        yStart = y;
-        break;
-      }
-      case 'L': {  // LineTo
-        uint8_t x1 = strtol(p, &p, 10);
-        uint8_t y1 = strtol(p, &p, 10);
-        tft.drawLine(x, y, x1, y1, color);
-        x = x1;
-        y = y1;
-        break;
-      }
-      case 'H': {  // Ligne horizontale
-        uint8_t x1 = strtol(p, &p, 10);
-        tft.drawFastHLine(x, y, x1 - x, color);
-        x = x1;
-        break;
-      }
-      case 'V': {  // Ligne verticale
-        uint8_t y1 = strtol(p, &p, 10);
-        tft.drawFastVLine(x, y, y1 - y, color);
-        y = y1;
-        break;
-      }
-      case 'Z': {  // ClosePath
-        tft.drawLine(x, y, xStart, yStart, color);
-        x = xStart;
-        y = yStart;
-        break;
-      }
-    }
-
-    skipSeparators(p);  // Nettoyer les séparateurs pour la prochaine commande
-  }
-}
-
-void skipSeparators(const char*& p) {
-  while (*p == ' ' || *p == ',') p++;
 }
