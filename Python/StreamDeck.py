@@ -15,6 +15,7 @@ import customtkinter
 from OpenHardwareMonitor.Hardware import Computer
 from OpenHardwareMonitor.Hardware import SensorType
 import json
+import cbor
 import psutil
 import math
 
@@ -389,26 +390,30 @@ def sendToArduino(screen_data, vol, color, clear):
         "clr": bool(clear)
     }
 
-    # Convertir le dictionnaire en chaîne JSON
-    json_data = json.dumps(data)
+    # Convertir le dictionnaire en format CBOR (plus compact que JSON)
+    cbor_data = cbor.dumps(data)
+    
+    # Ajouter un marqueur de fin pour faciliter la lecture côté Arduino
+    cbor_data_with_marker = cbor_data + b'\n'
 
-    # Envoyer les données à l'Arduino en tant que chaîne encodée
+    # Envoyer les données à l'Arduino en format binaire CBOR
     try:
         if (ser is None or not ser.is_open):
             print("Le port série n'est pas ouvert.")
             connexion_label.pack(side="top")  # Show the label
             connectToArduino()
         elif ser.is_open:
-            #ser.write((json_data + '\n').encode())
-            print("\nNombre d'octets envoyés:", ser.write((json_data + '\n').encode()))
+            bytes_sent = ser.write(cbor_data_with_marker)
+            print(f"\nNombre d'octets envoyés: {bytes_sent} (CBOR)")
+            # Comparaison avec JSON pour montrer la différence de taille
+            json_data = json.dumps(data).encode() + b'\n'
+            print(f"Taille équivalente en JSON: {len(json_data)} octets (économie: {len(json_data) - len(cbor_data_with_marker)} octets)")
         else:
             print("Le port série n'est pas ouvert.")
     except serial.SerialException as e:
         print("Erreur lors de l'envoi des données à l'Arduino:", e)
         connexion_label.pack(side="top")  # Show the label
         connectToArduino()
-    #print("\nDonnées envoyées à l'Arduino:", json_data + "\n")
-    # On affiche le nombre d'octets envoyés
 
 # Affiche ce que l'Arduino envoie sur le port série
 def readSerial():
