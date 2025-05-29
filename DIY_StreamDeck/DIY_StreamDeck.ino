@@ -114,12 +114,12 @@ void startScreen() {
 
 void setStaticLedColor(uint8_t r, uint8_t g, uint8_t b) {
   // Afficher les valeurs reçues pour débogage
-  Serial.print(F("setStaticLedColor - R: "));
+  /*Serial.print(F("setStaticLedColor - R: "));
   Serial.print(r);
   Serial.print(F(" G: "));
   Serial.print(g);
   Serial.print(F(" B: "));
-  Serial.println(b);
+  Serial.println(b);*/
 
   // Désactiver les interruptions pendant la mise à jour des LEDs
   noInterrupts();
@@ -129,12 +129,12 @@ void setStaticLedColor(uint8_t r, uint8_t g, uint8_t b) {
   value.b = b;
 
   // Afficher la valeur qui sera utilisée
-  Serial.print(F("Valeur définie - R: "));
+  /*Serial.print(F("Valeur définie - R: "));
   Serial.print(value.r);
   Serial.print(F(" G: "));
   Serial.print(value.g);
   Serial.print(F(" B: "));
-  Serial.println(value.b);
+  Serial.println(value.b);*/
 
   // Mettre à jour toutes les LEDs
   for (uint8_t i = 0; i < NB_LED; i++) {
@@ -147,7 +147,7 @@ void setStaticLedColor(uint8_t r, uint8_t g, uint8_t b) {
   // Réactiver les interruptions après la mise à jour
   interrupts();
 
-  Serial.println(F("Mise à jour des LEDs terminée"));
+  //Serial.println(F("Mise à jour des LEDs terminée"));
 }
 
 void rainbow(uint8_t wait) {
@@ -217,33 +217,39 @@ void processReceivedData() {
   static size_t bufferPos = 0;
   static unsigned long lastDataTime = 0;
   
-  // Lire les données disponibles (maximum 64 octets à la fois pour éviter de bloquer trop longtemps)
-  static unsigned long lastReadTime = 0;
+  // Lire les données disponibles (maximum 64 octets à la fois)
   bool dataRead = false;
   
-  // Lire jusqu'à 64 octets à chaque appel pour éviter de bloquer
+  // Lire jusqu'à 64 octets à chaque appel
   for (int i = 0; i < 64 && Serial.available() > 0; i++) {
-    if (bufferPos < sizeof(buffer) - 1) {  // Laisser de la place pour le terminateur nul
-      buffer[bufferPos++] = Serial.read();
+    if (bufferPos < sizeof(buffer) - 1) {
+      uint8_t c = Serial.read();
+      buffer[bufferPos++] = c;
       lastDataTime = millis();
       dataRead = true;
+      
+      // Vérifier immédiatement si c'est la fin d'un message
+      if (c == '\n') {
+        break;
+      }
     } else {
       // Buffer plein, vider le surplus
       Serial.read();
     }
   }
-  
-  // Si on a lu des données, on attend le prochain tour de boucle pour la suite
-  if (dataRead) {
-    return;
-  }
-  
-  // Vérifier si nous avons reçu des données complètes (terminées par un saut de ligne)
+
   bool hasCompleteMessage = false;
-  for (size_t i = 0; i < bufferPos; i++) {
-    if (buffer[i] == '\n') {
-      hasCompleteMessage = true;
-      break;
+  
+  // Si on a lu des données mais pas de fin de ligne, on attend la suite
+  if (dataRead) {
+    for (size_t i = 0; i < bufferPos; i++) {
+      if (buffer[i] == '\n') {
+        hasCompleteMessage = true;
+        break;
+      }
+    }
+    if (!hasCompleteMessage) {
+      return;
     }
   }
   
@@ -254,14 +260,14 @@ void processReceivedData() {
       return;  // On attend d'avoir un message complet
     } else if (bufferPos > 0) {
       // Si on a des données incomplètes après le timeout, on les traite
-      Serial.println(F("Temps d'attente dépassé, traitement des données incomplètes"));
+      //Serial.println(F("Temps d'attente dépassé, traitement des données incomplètes"));
     }
   }
   
   if (bufferPos > 0) {
-    Serial.println(F("\n--- Traitement des données ---"));
+    /*Serial.println(F("\n--- Traitement des données ---"));
     Serial.print(F("Octets à traiter: "));
-    Serial.println(bufferPos);
+    Serial.println(bufferPos);*/
     
     // Ajouter un terminateur nul pour la sécurité
     buffer[bufferPos] = '\0';
@@ -278,17 +284,17 @@ void processReceivedData() {
     CborValue it;
     CborError err = cbor_parser_init(buffer, bytesToProcess, 0, &parser, &it);
 
-    Serial.print(F("Erreur CBOR: "));
-    Serial.println(cbor_error_string(err));
+    /*Serial.print(F("Erreur CBOR: "));
+    Serial.println(cbor_error_string(err));*/
 
     if (err == CborNoError && cbor_value_is_map(&it)) {
-      Serial.println(F("Données CBOR valides (map)"));
+      //Serial.println(F("Données CBOR valides (map)"));
       // Traitement des données CBOR
       CborValue screenValue;
       if (cbor_value_map_find_value(&it, "s", &screenValue) == CborNoError && !cbor_value_is_null(&screenValue)) {
-        Serial.println(F("Données d'écran détectées"));
+        //Serial.println(F("Données d'écran détectées"));
         if (lastScreen == 'c') {
-          Serial.println(F("Nettoyage de l'écran"));
+          //Serial.println(F("Nettoyage de l'écran"));
           clearScreen();
           lastScreen = 's';
         }
@@ -296,7 +302,7 @@ void processReceivedData() {
         // Traitement des données d'écran
         displayDataCBOR(screenValue);
       } else {
-        Serial.println(F("Pas de données d'écran ou données invalides"));
+        //Serial.println(F("Pas de données d'écran ou données invalides"));
       }
 
       // Si on reçoit l'ordre de clear l'écran
@@ -309,69 +315,69 @@ void processReceivedData() {
       // Gestion de la couleur du ruban
       CborValue colorValue;
       if (cbor_value_map_find_value(&it, "c", &colorValue) == CborNoError) {
-        Serial.print(F("Type de données de couleur: "));
-        if (cbor_value_is_array(&colorValue)) {
+        //Serial.print(F("Type de données de couleur: "));
+        /*if (cbor_value_is_array(&colorValue)) {
           Serial.println(F("Tableau"));
         } else if (cbor_value_is_integer(&colorValue)) {
           Serial.println(F("Entier"));
         } else {
           Serial.println(F("Autre"));
-        }
+        }*/
 
         if (cbor_value_is_array(&colorValue)) {
           // Déterminer la taille du tableau
           size_t colorDataSize = 0;
           cbor_value_get_array_length(&colorValue, &colorDataSize);
-          Serial.print(F("Taille des données de couleur: rggggg "));
-          Serial.println(colorDataSize);
+          /*Serial.print(F("Taille des données de couleur: rggggg "));
+          Serial.println(colorDataSize);*/
 
           uint8_t colorData[MAX_COLOR_DATA_SIZE];
 
           if (colorDataSize > 0 && colorDataSize <= MAX_COLOR_DATA_SIZE) {
-            Serial.print(F("Utilisation d'un tableau statique de taille "));
-            Serial.println(MAX_COLOR_DATA_SIZE);
+            /*Serial.print(F("Utilisation d'un tableau statique de taille "));
+            Serial.println(MAX_COLOR_DATA_SIZE);*/
 
             // Initialiser le tableau
             memset(colorData, 0, sizeof(colorData));
-            Serial.println(F("Tableau initialisé avec succès"));
+            //Serial.println(F("Tableau initialisé avec succès"));
 
             // Entrer dans le tableau
             CborValue arrayIt;
             CborError enterErr = cbor_value_enter_container(&colorValue, &arrayIt);
-            Serial.print(F("Entrée dans le conteneur CBOR: "));
-            Serial.println(cbor_error_string(enterErr));
+            /*Serial.print(F("Entrée dans le conteneur CBOR: "));
+            Serial.println(cbor_error_string(enterErr));*/
 
             // Vérifier le type du conteneur
-            Serial.print(F("Type du conteneur: "));
+            /*Serial.print(F("Type du conteneur: "));
             if (cbor_value_is_array(&arrayIt)) {
               Serial.println(F("Tableau"));
             } else if (cbor_value_is_map(&arrayIt)) {
               Serial.println(F("Map"));
             } else {
               Serial.println(F("Autre"));
-            }
+            }*/
 
             // Remplir le tableau dynamique avec les valeurs
-            Serial.println(F("Valeurs de couleur reçues :"));
+            //Serial.println(F("Valeurs de couleur reçues :"));
             for (size_t i = 0; i < colorDataSize && !cbor_value_at_end(&arrayIt); i++) {
               if (cbor_value_is_integer(&arrayIt)) {
                 int value;
                 CborError err = cbor_value_get_int(&arrayIt, &value);
                 if (err == CborNoError) {
                   colorData[i] = (uint8_t)value;
-                  Serial.print(F("  ["));
+                  /*Serial.print(F("  ["));
                   Serial.print(i);
                   Serial.print(F("] = "));
-                  Serial.println((int)colorData[i]);
+                  Serial.println((int)colorData[i]);*/
                 } else {
-                  Serial.print(F("Erreur lecture valeur à l'index "));
+                  /*Serial.print(F("Erreur lecture valeur à l'index "));
                   Serial.print(i);
                   Serial.print(F(": "));
-                  Serial.println(cbor_error_string(err));
+                  Serial.println(cbor_error_string(err));*/
                 }
               } else {
-                Serial.print(F("Type de valeur inattendu à l'index "));
-                Serial.println(i);
+                /*Serial.print(F("Type de valeur inattendu à l'index "));
+                Serial.println(i);*/
               }
               cbor_value_advance(&arrayIt);
             }
@@ -380,13 +386,13 @@ void processReceivedData() {
             cbor_value_leave_container(&colorValue, &arrayIt);
 
             // Afficher le contenu du tableau pour débogage
-            Serial.println(F("Contenu du tableau de couleurs :"));
+            /*Serial.println(F("Contenu du tableau de couleurs :"));
             for (size_t i = 0; i < colorDataSize; i++) {
               Serial.print(F("  colorData["));
               Serial.print(i);
               Serial.print(F("] = "));
               Serial.println((int)colorData[i]);
-            }
+            }*/
 
             // Utiliser le tableau pour traiter les données
             switch (colorData[0]) {
@@ -405,8 +411,8 @@ void processReceivedData() {
 
             // Pas besoin de libérer la mémoire car c'est un tableau statique
           } else {
-            Serial.print(F("Taille des données invalide : "));
-            Serial.println(colorDataSize);
+            /*Serial.print(F("Taille des données invalide : "));
+            Serial.println(colorDataSize);*/
           }
         }
       }
@@ -418,14 +424,14 @@ void processReceivedData() {
   
   // Si on arrive ici sans avoir traité de message valide, on nettoie
   if (bufferPos > 0) {
-    Serial.println(F("Aucun message valide reçu, nettoyage du buffer"));
+    //Serial.println(F("Aucun message valide reçu, nettoyage du buffer"));
     bufferPos = 0;
   }
 }
 
 // Fonction pour afficher les données CBOR
 void displayDataCBOR(CborValue& data) {
-  Serial.println(F("Traitement des données d'écran..."));
+  //Serial.println(F("Traitement des données d'écran..."));
 
   // Désactiver les interruptions pendant l'affichage
   noInterrupts();
@@ -433,10 +439,10 @@ void displayDataCBOR(CborValue& data) {
   // Gestion des textes
   CborValue textValue;
   if (cbor_value_map_find_value(&data, "t", &textValue) == CborNoError) {
-    Serial.println(F("Clé 't' trouvée"));
+    //Serial.println(F("Clé 't' trouvée"));
 
     if (cbor_value_is_map(&textValue)) {
-      Serial.println(F("Données de texte valides (map)"));
+      //Serial.println(F("Données de texte valides (map)"));
 
       // Récupération de la couleur du texte
       uint16_t textColor = 0xFFFF;  // Blanc par défaut
@@ -696,7 +702,7 @@ void setup() {
   volDownButtonReg = PIN_TO_BASEREG(BOUTON_VOL_DOWN);
   volDownButtonMask = PIN_TO_BITMASK(BOUTON_VOL_DOWN);
 
-  // Initialisation de la communication série avec un timeout
+  // Initialisation de la communication série avec un timeout 
   Serial.begin(115200);
   Serial.setTimeout(100);  // Définir un timeout court pour éviter les blocages
 
@@ -751,7 +757,7 @@ void loop() {
   }*/
 
   // Vérifier les boutons
-  checkBtnPressed();
+  //checkBtnPressed();
 
   // Traiter les données reçues
   if (Serial.available() > 0) {
