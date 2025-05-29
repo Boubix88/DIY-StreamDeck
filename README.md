@@ -1,19 +1,81 @@
 # DIY-StreamDeck
 
-> [!WARNING]
-> Work in progress.
-
 ![DIY-StreamDeck Logo](https://raw.githubusercontent.com/Boubix88/DIY-StreamDeck/master/Documentation/logo_streamdeck.png)
 
-## Compilation
-> [!IMPORTANT] 
->- Ne fonctionne que sous Windows
->- python ./app.py
+> [!WARNING]
+> Ce projet est en cours de développement. La version Electron est en cours d'implémentation.
 
-## Build .exe
-> [!IMPORTANT] 
->- **Si première fois** : pyinstaller --onefile --windowed --icon="assets/icon.ico" app.py
->- **Sinon** : pyinstaller app.spec
+## Table des matières
+- [Présentation](#présentation)
+- [Fonctionnalités](#fonctionnalités)
+- [Prérequis](#prérequis)
+- [Installation](#installation)
+- [Développement](#développement)
+- [Compilation](#compilation)
+- [Build pour production](#build-pour-production)
+- [Structure du projet](#structure-du-projet)
+- [Contribution](#contribution)
+- [Licence](#licence)
+
+## Présentation
+
+DIY-StreamDeck est un projet de contrôleur de médias personnalisé pour Windows. Il offre une interface matérielle et logicielle pour contrôler le volume, gérer la lecture multimédia, surveiller les performances système et plus encore.
+
+## Fonctionnalités
+
+- **Contrôle du volume** : Ajustez le volume de votre PC Windows directement depuis le StreamDeck.
+- **Contrôle des médias** : Jouez, mettez en pause et naviguez entre les pistes précédentes et suivantes.
+- **Surveillance système** : Affichez les températures du CPU et du GPU, l'utilisation de la RAM et plus encore.
+- **Interface personnalisable** : Interface moderne et réactive construite avec React et Tailwind CSS.
+- **Communication série** : Communication avec le matériel Arduino via le port série.
+- **RGB personnalisable** : Contrôlez les lumières RGB du StreamDeck.
+
+## Prérequis
+
+- Node.js 16+ et npm 7+
+- Python 3.8+ (pour certaines fonctionnalités)
+- Un environnement de développement (VS Code recommandé)
+
+## Installation
+
+1. Clonez le dépôt :
+   ```bash
+   git clone https://github.com/Boubix88/DIY-StreamDeck.git
+   cd DIY-StreamDeck
+   ```
+
+2. Installez les dépendances :
+   ```bash
+   npm install
+   ```
+
+## Développement
+
+Pour lancer l'application en mode développement :
+
+```bash
+npm run dev
+```
+
+Cela lancera à la fois le serveur de développement React et l'application Electron.
+
+## Compilation
+
+Pour compiler l'application pour le développement :
+
+```bash
+npm run build
+```
+
+## Build pour production
+
+Pour créer un package d'installation pour votre système d'exploitation :
+
+```bash
+npm run electron:build
+```
+
+Les fichiers de sortie seront disponibles dans le dossier `dist/`.
 
 DIY-StreamDeck est un projet de contrôleur de médias personnalisé pour Windows. Il offre une interface matérielle et logicielle pour contrôler le volume, jouer/pauser le son, naviguer entre les pistes précédentes/suivantes et lancer des logiciels.
 
