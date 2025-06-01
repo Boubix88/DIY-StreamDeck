@@ -1,3 +1,5 @@
+import { Systeminformation } from "systeminformation";
+
 // Déclarations de types pour les API exposées par le préchargement Electron
 declare global {
   interface Window {
@@ -42,34 +44,11 @@ declare global {
       }>;
       
       // Méthodes pour les informations système
-      getCpuInfo: () => Promise<{
-        temperature: number;
-        usage: number;
-        frequency: number;
-        processes: number;
-      }>;
-      
-      getGpuInfo: () => Promise<{
-        temperature: number;
-        usage: number;
-        frequency: number;
-        memory: number;
-        memoryTotal: number;
-      }>;
-      
-      getRamInfo: () => Promise<{
-        total: number;
-        used: number;
-        free: number;
-        usage: number;
-      }>;
-      
-      getNetworkInfo: () => Promise<{
-        download: number;
-        upload: number;
-        ip: string;
-        status: string;
-      }>;
+      getCpuInfo: () => Promise<Systeminformation.CpuData>;
+      getCpuTemperature: () => Promise<Systeminformation.CpuTemperatureData>;
+      getGpuInfo: () => Promise<Systeminformation.GraphicsData>;
+      getRamInfo: () => Promise<Systeminformation.MemData>;
+      getNetworkInfo: () => Promise<import('./hooks/useSystemInfo').UINetworkInfo>;
       
       // Méthodes pour le contrôle RVB
       getRgbSettings: () => Promise<{

@@ -1,47 +1,10 @@
+import { ReadlineParser } from '@serialport/parser-readline';
+import { encode } from 'cbor-x';
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
 import * as path from 'path';
 import * as url from 'url';
-import { 
-  getAllSystemInfo, 
-  getCpuInfo, 
-  getGpuInfo, 
-  getRamInfo, 
-  getNetworkInfo 
-} from './systemInfo';
+import { getSystemInfo } from './ohmReader';
 const { SerialPort } = require('serialport');
-import { ReadlineParser } from '@serialport/parser-readline';
-
-// Cache pour les données système
-interface SystemCache {
-  timestamp: number;
-  data: any;
-}
-
-const CACHE_DURATION = 1000; // 1 seconde de cache
-const systemCache: Record<string, SystemCache> = {};
-
-// Fonction pour gérer le cache
-async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const now = Date.now();
-  
-  // Si les données en cache sont encore valides, on les retourne
-  if (systemCache[key] && (now - systemCache[key].timestamp) < CACHE_DURATION) {
-    return systemCache[key].data;
-  }
-  
-  // Sinon, on exécute la fonction et on met en cache le résultat
-  const data = await fn();
-  systemCache[key] = {
-    timestamp: now,
-    data
-  };
-  
-  return data;
-}
-
-type SerialPortType = typeof SerialPort;
-import { encode } from 'cbor-x';
-import * as si from 'systeminformation';
 
 let mainWindow: BrowserWindow | null = null;
 let port: InstanceType<typeof SerialPort> | null = null;
@@ -83,114 +46,26 @@ function createWindow() {
 // Vérifier si les gestionnaires IPC sont déjà enregistrés
 const ipcHandlers = new Set<string>();
 
-function registerIpcHandler(channel: string, handler: (event: IpcMainInvokeEvent, ...args: any[]) => Promise<any>) {
+function registerIpcHandler(channel: string, handler: (...args: any[]) => any) {
   if (ipcHandlers.has(channel)) {
     console.warn(`Handler for channel '${channel}' is already registered. Skipping...`);
     return;
   }
-  
   ipcHandlers.add(channel);
   ipcMain.handle(channel, handler);
 }
 
-// System information handlers with caching
-registerIpcHandler('system:getAllInfo', async () => {
-  return withCache('allSystemInfo', async () => {
-    try {
-      const [cpu, gpu, ram, network] = await Promise.all([
-        getCpuInfo(),
-        getGpuInfo(),
-        getRamInfo(),
-        getNetworkInfo()
-      ]);
-      
-      return { cpu, gpu, ram, network };
-    } catch (error) {
-      console.error('Error getting all system info:', error);
-      throw error;
-    }
-  });
+// Handler unique pour toutes les infos système (CPU, GPU, RAM, Réseau)
+registerIpcHandler('system:getAllSystemInfo', async () => {
+  try {
+    const data = getSystemInfo();
+    return data;
+  } catch (error) {
+    console.error('Erreur lors de la lecture des infos système OHM:', error);
+    throw error;
+  }
 });
 
-registerIpcHandler('system:getCpuInfo', async (event) => {
-  return withCache('cpuInfo', async () => {
-    try {
-      const [cpu, currentLoad] = await Promise.all([
-        si.cpu(),
-        si.currentLoad()
-      ]);
-      
-      return {
-        manufacturer: cpu.manufacturer,
-        brand: cpu.brand,
-        speed: cpu.speed,
-        cores: cpu.cores,
-        physicalCores: cpu.physicalCores,
-        currentLoad: currentLoad.currentLoad
-      };
-    } catch (error) {
-      console.error('Error getting CPU info:', error);
-      throw error;
-    }
-  });
-});
-
-registerIpcHandler('system:getGpuInfo', async () => {
-  return withCache('gpuInfo', async () => {
-    try {
-      const gpu = await si.graphics();
-      return {
-        controllers: gpu.controllers.map(controller => ({
-          model: controller.model,
-          vendor: controller.vendor,
-          vram: controller.vram
-        }))
-      };
-    } catch (error) {
-      console.error('Error getting GPU info:', error);
-      throw error;
-    }
-  });
-});
-
-registerIpcHandler('system:getRamInfo', async () => {
-  return withCache('ramInfo', async () => {
-    try {
-      const mem = await si.mem();
-      return {
-        total: mem.total,
-        free: mem.free,
-        used: mem.used,
-        active: mem.active
-      };
-    } catch (error) {
-      console.error('Error getting RAM info:', error);
-      throw error;
-    }
-  });
-});
-
-registerIpcHandler('system:getNetworkInfo', async () => {
-  return withCache('networkInfo', async () => {
-    try {
-      const networkInterfaces = await si.networkInterfaces();
-      return {
-        interfaces: networkInterfaces.map(iface => ({
-          iface: iface.iface,
-          ip4: iface.ip4,
-          ip6: iface.ip6,
-          mac: iface.mac,
-          internal: iface.internal
-        }))
-      };
-    } catch (error) {
-      console.error('Error getting network info:', error);
-      throw error;
-    }
-  });
-});
-
-// Spotify handler (placeholder - implement actual Spotify integration)
 registerIpcHandler('spotify:getTrackInfo', async () => {
   return {
     title: 'Not Playing',
@@ -238,13 +113,13 @@ registerIpcHandler('serial:list', async () => {
 
 registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath: string) => {
   console.log('Connecting to port:', portPath);
-  
+
   // Vérifier que le port est bien défini
   if (!portPath) {
     console.error('No port path provided');
     return false;
   }
-  
+
   try {
     // Fermer la connexion existante si elle existe
     if (port) {
@@ -252,7 +127,7 @@ registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath:
         parser.removeAllListeners();
         parser = null;
       }
-      
+
       await new Promise<void>((resolve) => {
         if (port) {
           port.close(() => {
@@ -264,17 +139,17 @@ registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath:
         }
       });
     }
-    
+
     // Créer une nouvelle instance du port série
     port = new SerialPort({
       path: portPath,
       baudRate: 115200,
       autoOpen: false
     });
-    
+
     // Créer un parser pour lire les lignes de données
     parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
-    
+
     // Gestion des erreurs
     port.on('error', (err: Error) => {
       console.error('Serial port error:', err);
@@ -319,16 +194,16 @@ registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath:
 
 registerIpcHandler('serial:disconnect', async () => {
   console.log('Disconnecting from serial port...');
-  
+
   if (!port) {
     console.log('No active port to disconnect');
     return true;
   }
-  
+
   try {
     const currentPort = port;
     port = null; // Réinitialiser la référence au port immédiatement
-    
+
     await new Promise<void>((resolve, reject) => {
       currentPort.close((err: Error | null | undefined) => {
         if (err) {
@@ -340,7 +215,7 @@ registerIpcHandler('serial:disconnect', async () => {
         }
       });
     });
-    
+
     return true;
   } catch (error) {
     console.error('Error in serial:disconnect handler:', error);
@@ -350,7 +225,7 @@ registerIpcHandler('serial:disconnect', async () => {
 
 registerIpcHandler('serial:send', async (_, data: any) => {
   console.log('Sending data to serial port:', data);
-  
+
   if (!port) {
     const error = new Error('Not connected to any port');
     console.error(error.message);
@@ -366,7 +241,7 @@ registerIpcHandler('serial:send', async (_, data: any) => {
 
   try {
     const encodedData = encode(data);
-    
+
     await new Promise<void>((resolve, reject) => {
       console.log('Writing data to port...');
       currentPort.write(encodedData, (err: Error | null | undefined) => {
@@ -375,7 +250,7 @@ registerIpcHandler('serial:send', async (_, data: any) => {
           reject(err);
           return;
         }
-        
+
         console.log('Data written, draining buffer...');
         currentPort.drain((drainErr: Error | null | undefined) => {
           if (drainErr) {
@@ -388,7 +263,7 @@ registerIpcHandler('serial:send', async (_, data: any) => {
         });
       });
     });
-    
+
     return { success: true };
   } catch (error) {
     console.error('Error in serial:send handler:', error);

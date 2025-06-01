@@ -22,7 +22,7 @@ const SerialMonitor: React.FC<SerialMonitorProps> = ({
   }, [logs]);
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 shadow-lg flex flex-col h-full overflow-y-auto max-h-[350px]">
+    <div className="bg-gray-800 rounded-lg p-4 shadow-lg flex flex-col h-full overflow-y-auto w-full h-full">
       <div className="flex justify-between items-center mb-2">
         <h2 className="text-lg font-semibold">
           Moniteur Série

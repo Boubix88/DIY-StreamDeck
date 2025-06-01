@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Cpu, Wifi, Volume2, Music, Monitor, Terminal } from 'react-feather';
-import { useSerial } from './hooks/useSerial';
+import React, { useState, useEffect, useMemo } from 'react';
+import CpuInfoCard from './components/CpuInfoCard';
+import GpuInfoCard from './components/GpuInfoCard';
+import RamInfoCard from './components/RamInfoCard';
+import NetworkInfoCard from './components/NetworkInfoCard';
+import KeyGrid from './components/KeyGrid';
+import ArduinoPreview from './components/ArduinoPreview';
+import RgbControl from './components/RgbControl';
+import PortSelector from './components/PortSelector';
 import SerialMonitor from './components/SerialMonitor';
+import SpotifyCard from './components/SpotifyCard';
 import useSystemInfo from './hooks/useSystemInfo';
-import useSpotify from './hooks/useSpotify';
-import useRgbControl from './hooks/useRgbControl';
-import useVolumeControl from './hooks/useVolumeControl';
-import { MODE_STATIC, MODE_SCROLLING_STATIC, MODE_SCROLLING_RGB } from '@shared/constants';
+
+// Dashboard principal "gamer"
 
 interface ScreenData {
   s: {
@@ -21,427 +26,323 @@ interface ScreenData {
 }
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('cpu');
-  const { 
-    ports, 
-    connectedPort, 
-    connectToPort, 
-    disconnectFromPort, 
-    sendData, 
-    serialLogs, 
-    clearLogs 
-  } = useSerial();
-  const { cpuInfo, gpuInfo, ramInfo, networkInfo } = useSystemInfo();
-  const { currentTrack, isPlaying, togglePlayPause } = useSpotify();
-  const { 
-    color, 
-    mode, 
-    speed, 
-    updateColor, 
-    updateMode, 
-    updateSpeed,
-    setHexColor,
-    getHexColor,
-    MODE_STATIC,
-    MODE_SCROLLING_STATIC,
-    MODE_SCROLLING_RGB
-  } = useRgbControl();
-  const { volume, setVolume } = useVolumeControl();
+  const [timeInterval, setTimeInterval] = useState<number>(1000);
+  const [activeScreen, setActiveScreen] = useState<number>(0);
+  const { cpuInfo, cpuTemperature, gpuInfo, ramInfo, networkInfo } = useSystemInfo(timeInterval);
 
-  // Référence pour stocker les dernières données envoyées
-  const lastSentData = useRef<{data: any, tab: string}>({data: null, tab: ''});
+  // Assignations locales (à relier à la persistance plus tard)
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
 
-  // Effet pour envoyer les données à l'Arduino lorsque les informations changent
+  // Fonctions pour gérer l'assignation/lancement/suppression (placeholders)
+  const handleAssign = (i: number, j: number) => {
+    const key = `${i},${j}`;
+    // TODO: ouvrir un vrai dialogue de sélection
+    const fakeApp = prompt('Chemin de l\'application à assigner ?');
+    if (fakeApp) setAssignments(a => ({ ...a, [key]: fakeApp }));
+  };
+  const handleLaunch = (i: number, j: number) => {
+    const key = `${i},${j}`;
+    alert("Lancer l'application assignée à la touche " + key + ": " + assignments[key] || 'Aucune');
+  };
+  const handleDelete = (i: number, j: number) => {
+    const key = `${i},${j}`;
+    setAssignments(a => { const b = { ...a }; delete b[key]; return b; });
+  };
+
+  // --- RGB State ---
+  const [mode, setMode] = useState(0);
+  const [color, setColor] = useState({ r: 0, g: 255, b: 128 });
+  const [speed, setSpeed] = useState(10);
+
+  // --- Construction dynamique du payload Arduino ---
+  // (Inspiré du Python: data = {"s": screenData, "c": colorData, "clr": bool(clear) })
+  function buildArduinoPayload() {
+    // Génération dynamique des écrans à partir des vraies infos système
+    // --- CPU ---
+    const cpuScreen = {
+      t: {
+        t: [
+          [60, 40, 4, `CPU ${cpuInfo?.usage ?? '--'}%`],
+          [120, 80, 3, `Freq ${cpuInfo?.frequency ? cpuInfo.frequency + 'GHz' : '--'}`],
+          [120, 120, 2, `Proc ${cpuInfo?.processCount ?? '--'}`],
+        ],
+        c: "00FF00"
+      },
+      v: [
+        ["M 10 120 L 120 10 L 200 120 Z", "FF0000"] // Ex: triangle décoratif
+      ]
+    };
+    // --- GPU ---
+    const gpuScreen = {
+      t: {
+        t: [
+          [80, 70, 5, `GPU ${gpuInfo?.usage ?? '--'}%`],
+          [100, 120, 2, `Temp ${gpuInfo?.temperature ?? '--'}°C`],
+          [120, 40, 2, `VRAM ${gpuInfo?.vramUsed ?? '--'}MB`],
+        ],
+        c: "00BFFF"
+      },
+      v: [
+        ["M 50 50 L 180 50 L 115 180 Z", "FFA500"]
+      ]
+    };
+    // --- RAM ---
+    const ramScreen = {
+      t: {
+        t: [
+          [60, 60, 4, `RAM`],
+          [120, 100, 3, `${ramInfo?.used ?? '--'} / ${ramInfo?.total ?? '--'} GB`],
+        ],
+        c: "FF00FF"
+      },
+      v: [
+        ["M 30 30 L 210 30 L 210 210 L 30 210 Z", "00FF00"]
+      ]
+    };
+    // --- Réseau ---
+    const netScreen = {
+      t: {
+        t: [
+          [60, 60, 4, `Net`],
+          [120, 100, 2, `↓${networkInfo?.rxRate ?? '--'}MB/s`],
+          [120, 120, 2, `↑${networkInfo?.txRate ?? '--'}MB/s`],
+        ],
+        c: "FFFF00"
+      },
+      v: [
+        ["M 50 50 L 180 50 L 180 180 L 50 180 Z", "888888"]
+      ]
+    };
+    // --- Mapping écran actif ---
+    const screens = [cpuScreen, gpuScreen, ramScreen, netScreen];
+    // --- RGB/Mode/Brightness/Speed ---
+    // Format: [mode, r, g, b, brightness, speed]
+    const colorData = [mode, color.r, color.g, color.b, 100, speed];
+    // --- Clear flag (ex: reset écran) ---
+    const clear = false; // À relier à un bouton plus tard
+    // --- Payload complet ---
+    return {
+      s: screens[activeScreen] || cpuScreen,
+      c: colorData,
+      clr: clear
+    };
+  }
+  
+  // --- Gestion port série et terminal ---
+  const [ports, setPorts] = useState<{ path: string; manufacturer?: string }[]>([]);
+  const [connectedPort, setConnectedPort] = useState<string | null>(null);
+  const [serialLogs, setSerialLogs] = useState<string[]>([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // Rafraîchir la liste des ports série dynamiquement
+  useEffect(() => {
+    let mounted = true;
+    async function refreshPorts() {
+      try {
+        const portList = await window.electronAPI.invoke('serial:list');
+        if (mounted) setPorts(portList);
+      } catch (e) {
+        setPorts([]);
+      }
+    }
+    refreshPorts();
+    const interval = setInterval(refreshPorts, 2000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  // Connexion série (IPC)
+  const handleConnect = async (port: string) => {
+    setIsConnecting(true);
+    try {
+      const ok = await window.electronAPI.invoke('serial:connect', port);
+      if (ok) {
+        setConnectedPort(port);
+        setSerialLogs(l => [...l, `[INFO] Connecté à ${port}`]);
+      } else {
+        setSerialLogs(l => [...l, `[ERROR] Échec connexion à ${port}`]);
+      }
+    } catch (e: any) {
+      setSerialLogs(l => [...l, `[ERROR] ${e.message || e}`]);
+    }
+    setIsConnecting(false);
+  };
+  // Déconnexion série
+  const handleDisconnect = async () => {
+    try {
+      await window.electronAPI.invoke('serial:disconnect');
+      setConnectedPort(null);
+      setSerialLogs(l => [...l, `[INFO] Déconnecté`]);
+    } catch (e: any) {
+      setSerialLogs(l => [...l, `[ERROR] ${e.message || e}`]);
+    }
+  };
+  // Nettoyer logs
+  const handleClearLogs = () => setSerialLogs([]);
+
+  // Écoute logs série (data reçue)
+  useEffect(() => {
+    // Utilise l'API typée du preload
+    const unsubscribe = window.electronAPI.onSerialData((msg: string) => {
+      setSerialLogs(l => [...l, msg]);
+    });
+    return () => { unsubscribe && unsubscribe(); };
+  }, []);
+
+  // Ce payload sera envoyé à l'Arduino (CBOR côté main)
+  const arduinoPayload = useMemo(() => buildArduinoPayload(), [cpuInfo, gpuInfo, ramInfo, networkInfo, mode, color, speed, activeScreen]);
+
+  // Pour la preview, on passe uniquement le screenData de l'écran actif
+  const previewData = [arduinoPayload.s];
+
+  // Envoi automatique du payload à l'Arduino (CBOR côté main)
   useEffect(() => {
     if (!connectedPort) return;
-
-    const sendUpdate = () => {
-      let screenData: ScreenData;
-      
-      // Préparer les données en fonction de l'onglet actif
-      switch (activeTab) {
-        case 'cpu':
-          screenData = {
-            s: {
-              title: 'CPU',
-              items: [
-                { label: 'Temp', value: `${Math.round(cpuInfo.temperature)}°C` },
-                { label: 'Usage', value: `${Math.round(cpuInfo.usage)}%` },
-                { label: 'Freq', value: `${(cpuInfo.frequency / 1000).toFixed(1)} GHz` },
-                { label: 'Processes', value: cpuInfo.processes },
-              ],
-            },
-          };
-          break;
-          
-        case 'gpu':
-          screenData = {
-            s: {
-              title: 'GPU',
-              items: [
-                { label: 'Temp', value: `${Math.round(gpuInfo.temperature)}°C` },
-                { label: 'Usage', value: `${Math.round(gpuInfo.usage)}%` },
-                { label: 'Freq', value: `${Math.round(gpuInfo.frequency)} MHz` },
-                { label: 'Memory', value: `${Math.round(gpuInfo.memory)} MB` },
-              ],
-            },
-          };
-          break;
-          
-        case 'spotify':
-          // Ne pas envoyer de mises à jour si aucune piste n'est en cours de lecture
-          if (!currentTrack.title && !currentTrack.artist) return;
-          
-          screenData = {
-            s: {
-              title: currentTrack.title ? 'Now Playing' : 'Paused',
-              items: [
-                { label: 'Title', value: currentTrack.title || 'No track' },
-                { label: 'Artist', value: currentTrack.artist || 'Unknown' },
-                { label: 'Album', value: currentTrack.album || 'Unknown' },
-                { label: 'Status', value: isPlaying ? 'Playing' : 'Paused' },
-              ],
-            },
-          };
-          break;
-          
-        case 'network':
-          screenData = {
-            s: {
-              title: 'Network',
-              items: [
-                { label: 'Download', value: `${networkInfo.download.toFixed(1)} MB/s` },
-                { label: 'Upload', value: `${networkInfo.upload.toFixed(1)} MB/s` },
-                { label: 'IP', value: networkInfo.ip || 'Disconnected' },
-                { label: 'Status', value: networkInfo.status },
-              ],
-            },
-          };
-          break;
-          
-        case 'volume':
-          screenData = {
-            s: {
-              title: 'Volume',
-              items: [
-                { label: 'Level', value: `${Math.round(volume)}%` },
-                { label: '', value: '', icon: 'volume' },
-                { label: '', value: '' },
-                { label: '', value: '' },
-              ],
-            },
-          };
-          break;
-          
-        default:
-          screenData = { s: { title: 'StreamDeck', items: [] } };
+    let stopped = false;
+    const sendLoop = async () => {
+      while (!stopped && connectedPort) {
+        try {
+          await window.electronAPI.invoke('serial:send', arduinoPayload);
+        } catch (e: any) {
+          setSerialLogs(l => [...l, `[ERROR] Envoi série: ${e.message || e}`]);
+        }
+        await new Promise(res => setTimeout(res, timeInterval));
       }
-      
-      // Ajouter les données RGB si nécessaire
-      let rgbData: number[] = [];
-      if (mode === MODE_STATIC) {
-        rgbData = [MODE_STATIC, color.r, color.g, color.b];
-      } else if (mode === MODE_SCROLLING_STATIC) {
-        rgbData = [MODE_SCROLLING_STATIC, color.r, color.g, color.b, speed];
-      } else if (mode === MODE_SCROLLING_RGB) {
-        rgbData = [MODE_SCROLLING_RGB, 0, 0, 0, speed];
-      }
-      
-      if (rgbData.length > 0) {
-        screenData.c = rgbData;
-      }
-
-      // Vérifier si les données ont changé par rapport à la dernière fois
-      const currentData = JSON.stringify(screenData);
-      const lastData = JSON.stringify(lastSentData.current.data);
-      
-      // Ne pas envoyer si les données sont identiques et que l'onglet n'a pas changé
-      if (currentData === lastData && activeTab === lastSentData.current.tab) {
-        return;
-      }
-      
-      // Mettre à jour les dernières données envoyées
-      lastSentData.current = {data: screenData, tab: activeTab};
-      
-      // Envoyer les données à l'Arduino
-      sendData(screenData);
     };
-    
-    // Exécuter immédiatement et configurer un intervalle pour les mises à jour
-    sendUpdate();
-    const interval = setInterval(sendUpdate, 1000);
-    
-    // Nettoyer l'intervalle lors du démontage du composant
-    return () => clearInterval(interval);
-  }, [activeTab, connectedPort, cpuInfo, gpuInfo, currentTrack, isPlaying, networkInfo, volume, mode, color, speed, sendData]);
+    sendLoop();
+    return () => { stopped = true; };
+  }, [connectedPort, arduinoPayload, timeInterval]);
+
+
+
+  // Mock Spotify data (à remplacer par vrai hook plus tard)
+  const spotifyTrack = {
+    title: 'Cyberpunk Dreams',
+    artist: 'The Midnight',
+    album: 'Monsters',
+    albumArt: '',
+    isPlaying: true
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">DIY StreamDeck</h1>
-        <div className="flex items-center space-x-4 mb-4">
-          <div className="flex-1">
+    <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#111827] flex flex-col items-center justify-center">
+      <div className="w-full flex flex-col items-center mb-6">
+        <h2 className="text-4xl md:text-5xl font-extrabold text-green-400 tracking-widest uppercase text-center"
+          style={{ textShadow: '0 0 32px #22d3ee, 0 0 8px #16f2b3' }}>
+          STREAMDECK
+        </h2>
+        <div className="flex flex-row flex-wrap justify-center items-center gap-6 mt-4 px-4">
+          {/* Connexion série */}
+          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-yellow-400">
+            <span className="text-yellow-300 font-bold mr-2">Port série :</span>
             <select
-              className="bg-gray-800 text-white p-2 rounded w-full"
+              className="bg-gray-700 text-white p-1 rounded"
               value={connectedPort || ''}
-              onChange={(e) => {
+              onChange={e => {
                 const port = e.target.value;
-                if (port) {
-                  connectToPort(port);
-                } else {
-                  disconnectFromPort();
-                }
+                if (port) handleConnect(port);
+                else handleDisconnect();
               }}
             >
-              <option value="">Select a port</option>
-              {ports.map((port) => (
+              <option value="">Sélectionner un port</option>
+              {ports.map(port => (
                 <option key={port.path} value={port.path}>
-                  {port.path} - {port.manufacturer || 'Unknown'}
+                  {port.path} - {port.manufacturer || 'Inconnu'}
                 </option>
               ))}
             </select>
+            <div className={`w-4 h-4 rounded-full ml-2 ${connectedPort ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
+            <span className="text-xs text-gray-400 ml-1">{connectedPort ? 'Connecté' : 'Déconnecté'}</span>
           </div>
-          <div className={`w-4 h-4 rounded-full ${connectedPort ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
-          <span>{connectedPort ? 'Connected' : 'Disconnected'}</span>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Sidebar */}
-        <div className="md:col-span-1 bg-gray-800 rounded-lg p-4">
-          <h2 className="text-xl font-semibold mb-4">Navigation</h2>
-          <nav className="flex-col space-y-2 mb-6 overflow-y-auto pb-2">
-          <button
-            onClick={() => setActiveTab('cpu')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'cpu' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Cpu size={16} />
-            <span>CPU</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('gpu')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'gpu' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Monitor size={16} />
-            <span>GPU</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('ram')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'ram' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <span>RAM</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('network')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'network' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Wifi size={16} />
-            <span>Réseau</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('spotify')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'spotify' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Music size={16} />
-            <span>Spotify</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('volume')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'volume' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Volume2 size={16} />
-            <span>Volume</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('serial')}
-            className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
-              activeTab === 'serial' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            <Terminal size={16} />
-            <span>Moniteur Série</span>
-          </button>
-        </nav>
-
-          {/* RGB Controls */}
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">LED Control</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Mode</label>
-                <select
-                  className="w-full bg-gray-700 text-white p-2 rounded"
-                  value={mode}
-                  onChange={(e) => updateMode(parseInt(e.target.value))}
-                >
-                  <option value={MODE_STATIC}>Static</option>
-                  <option value={MODE_SCROLLING_STATIC}>Scrolling Static</option>
-                  <option value={MODE_SCROLLING_RGB}>Rainbow</option>
-                </select>
-              </div>
-
-              {mode !== MODE_SCROLLING_RGB && (
-                <div>
-                  <label className="block text-sm font-medium mb-1">Color</label>
-                  <input
-                    type="color"
-                    className="w-full h-10"
-                    value={`#${color.r.toString(16).padStart(2, '0')}${color.g.toString(16).padStart(2, '0')}${color.b.toString(16).padStart(2, '0')}`}
-                    onChange={(e) => {
-                      const hex = e.target.value;
-                      updateColor({
-                        r: parseInt(hex.slice(1, 3), 16),
-                        g: parseInt(hex.slice(3, 5), 16),
-                        b: parseInt(hex.slice(5, 7), 16)
-                      });
-                    }}
-                  />
-                </div>
-              )}
-
-              {(mode === MODE_SCROLLING_STATIC || mode === MODE_SCROLLING_RGB) && (
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Speed: {speed}
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="50"
-                    value={speed}
-                    onChange={(e) => updateSpeed(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                </div>
-              )}
-            </div>
+          {/* Sélecteur d'intervalle de rafraîchissement */}
+          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-blue-400">
+            <span className="text-blue-300 font-bold mr-2">Rafraîchissement :</span>
+            <select
+              className="bg-gray-700 text-white p-1 rounded"
+              value={timeInterval}
+              onChange={e => setTimeInterval(Number(e.target.value))}
+            >
+              <option value={500}>0.5s</option>
+              <option value={1000}>1s</option>
+              <option value={2000}>2s</option>
+              <option value={5000}>5s</option>
+            </select>
+          </div>
+          {/* Sélecteur écran actif */}
+          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-purple-400">
+            <span className="text-purple-300 font-bold mr-2">Écran Arduino :</span>
+            <button
+              className="bg-purple-600 text-white px-2 py-1 rounded hover:bg-purple-500"
+              onClick={() => setActiveScreen(s => (s - 1 + 5) % 5)}
+            >⟨</button>
+            <span className="text-white font-bold text-lg">{activeScreen + 1}</span>
+            <button
+              className="bg-purple-600 text-white px-2 py-1 rounded hover:bg-purple-500"
+              onClick={() => setActiveScreen(s => (s + 1) % 5)}
+            >⟩</button>
           </div>
         </div>
-
-        {/* Main Content */}
-        <div className="md:col-span-3 bg-gray-800 rounded-lg p-6">
-          {activeTab === 'cpu' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">CPU Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InfoCard label="Temperature" value={`${cpuInfo.temperature}°C`} />
-                <InfoCard label="Usage" value={`${cpuInfo.usage}%`} />
-                <InfoCard label="Frequency" value={`${cpuInfo.frequency} GHz`} />
-                <InfoCard label="Processes" value={cpuInfo.processes} />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'gpu' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">GPU Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InfoCard label="Temperature" value={`${gpuInfo.temperature}°C`} />
-                <InfoCard label="Usage" value={`${gpuInfo.usage}%`} />
-                <InfoCard label="Frequency" value={`${gpuInfo.frequency} MHz`} />
-                <InfoCard label="Memory Used" value={`${gpuInfo.memory} MB`} />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'spotify' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Now Playing</h2>
-              <div className="flex items-center space-x-6">
-                <div className="w-32 h-32 bg-gray-700 rounded-lg flex items-center justify-center">
-                  {currentTrack.albumArt ? (
-                    <img
-                      src={currentTrack.albumArt}
-                      alt="Album Art"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <Music size={48} className="text-gray-500" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold">{currentTrack.title || 'Not Playing'}</h3>
-                  <p className="text-gray-400">{currentTrack.artist || '—'}</p>
-                  <p className="text-gray-500 text-sm">{currentTrack.album || '—'}</p>
-                  <button
-                    className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
-                    onClick={togglePlayPause}
-                  >
-                    {isPlaying ? 'Pause' : 'Play'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'network' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6">Network Information</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InfoCard label="Download" value={`${networkInfo.download} MB/s`} />
-                <InfoCard label="Upload" value={`${networkInfo.upload} MB/s`} />
-                <InfoCard label="IP Address" value={networkInfo.ip} />
-                <InfoCard label="Status" value={networkInfo.status} />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'volume' && (
-            <div className="flex flex-col items-center justify-center h-64">
-              <h2 className="text-2xl font-bold mb-8">Volume Control</h2>
-              <div className="w-64">
-                <div className="flex items-center justify-between mb-2">
-                  <Volume2 size={20} />
-                  <span className="text-2xl font-bold">{volume}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={volume}
-                  onChange={(e) => setVolume(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'serial' && (
-            <div className="h-full">
-              <h2 className="text-2xl font-bold mb-4">Moniteur Série</h2>
-              <div className="h-[calc(100%-3rem)]">
-                <SerialMonitor 
-                  logs={serialLogs} 
-                  onClear={clearLogs}
-                  maxHeight="100%"
-                />
-              </div>
-            </div>
-          )}
+        {/* Avertissement si intervalle trop court */}
+        {timeInterval < 1000 && (
+          <div className="mt-2 text-xs text-yellow-400 bg-yellow-900 rounded px-2 py-1 animate-pulse">
+            Attention : Un intervalle &lt; 1s peut ralentir linterface !
+          </div>
+        )}
+      </div>
+      {/* Nouveau layout grid 6 colonnes, inspiré de l'exemple */}
+      <div className="w-full px-8 grid grid-cols-5 gap-8">
+        {/* RGB à gauche */}
+        <div className="col-span-1 row-span-1 aspect-[1/1]">
+          <RgbControl
+            mode={mode}
+            color={color}
+            speed={speed}
+            onModeChange={setMode}
+            onColorChange={setColor}
+            onSpeedChange={setSpeed}
+          />
+        </div>
+        {/* KeyGrid centré, large */}
+        <div className="col-span-2 row-span-1 aspect-[2/1]">
+          <KeyGrid
+            assignments={assignments}
+            onAssign={handleAssign}
+            onLaunch={handleLaunch}
+            onDelete={handleDelete}
+          />
+        </div>
+        {/* ArduinoPreview + Spotify à droite */}
+        <div className="col-span-1 row-span-1 aspect-[1/1]">
+          <ArduinoPreview previewData={previewData} activeScreen={activeScreen} />
+        </div>
+        <div className="col-span-2 row-span-1 aspect-[2/1]">
+          <SpotifyCard track={spotifyTrack} />
+        </div>
+        <div className="col-span-1 row-span-2 aspect-[1/2]">
+          <NetworkInfoCard networkInfo={networkInfo} />
+        </div>
+        {/* SerialMonitor pleine largeur */}
+        <div className="col-span-2 row-span-1 aspect-[2/1]">
+          <SerialMonitor logs={serialLogs} onClear={handleClearLogs} maxHeight="120px" />
+        </div>
+        {/* System Info Cards (CPU, GPU, RAM, Network) en ligne, pleine largeur */}
+        <div className="col-span-1 row-span-1 aspect-[1/1]">
+          <CpuInfoCard cpuInfo={cpuInfo} cpuTemperature={cpuTemperature} />
+        </div>
+        <div className="col-span-1 row-span-1 aspect-[1/1]">
+          <GpuInfoCard gpuInfo={gpuInfo} />
+        </div>
+        <div className="col-span-1 row-span-1 aspect-[1/1]">
+          <RamInfoCard ramInfo={ramInfo} />
         </div>
       </div>
+      <footer className="mt-8 mb-4 text-gray-500 text-xs opacity-60 text-center w-full">
+        DIY StreamDeck &copy; {new Date().getFullYear()} | Dashboard Gamer UI
+      </footer>
     </div>
   );
 };
 
-// Composant d'affichage des informations
-const InfoCard: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
-  <div className="bg-gray-700 p-4 rounded-lg">
-    <h3 className="text-sm font-medium text-gray-400 mb-1">{label}</h3>
-    <p className="text-xl font-semibold">{value}</p>
-  </div>
-);
-
 export default App;
+
+
+// (Plus de InfoCard, voir SystemInfoCards)

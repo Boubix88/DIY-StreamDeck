@@ -219,9 +219,11 @@ void processReceivedData() {
   
   // Lire les données disponibles (maximum 64 octets à la fois)
   bool dataRead = false;
+
+  bool hasCompleteMessage = false;
   
   // Lire jusqu'à 64 octets à chaque appel
-  for (int i = 0; i < 64 && Serial.available() > 0; i++) {
+  for (int i = 0; i < 256 && Serial.available() > 0; i++) {
     if (bufferPos < sizeof(buffer) - 1) {
       uint8_t c = Serial.read();
       buffer[bufferPos++] = c;
@@ -230,6 +232,7 @@ void processReceivedData() {
       
       // Vérifier immédiatement si c'est la fin d'un message
       if (c == '\n') {
+        hasCompleteMessage = true;
         break;
       }
     } else {
@@ -238,10 +241,9 @@ void processReceivedData() {
     }
   }
 
-  bool hasCompleteMessage = false;
   
   // Si on a lu des données mais pas de fin de ligne, on attend la suite
-  if (dataRead) {
+  /*if (dataRead) {
     for (size_t i = 0; i < bufferPos; i++) {
       if (buffer[i] == '\n') {
         hasCompleteMessage = true;
@@ -250,13 +252,12 @@ void processReceivedData() {
     }
     if (!hasCompleteMessage) {
       return;
-    }
-  }
+    }*/
   
   // Si pas de message complet, on attend d'avoir plus de données
   if (!hasCompleteMessage) {
     // Si ça fait plus de 100ms depuis la dernière donnée, on considère que le message est incomplet
-    if (millis() - lastDataTime < 100) {
+    if (millis() - lastDataTime < 15) {
       return;  // On attend d'avoir un message complet
     } else if (bufferPos > 0) {
       // Si on a des données incomplètes après le timeout, on les traite
@@ -431,12 +432,104 @@ void processReceivedData() {
 
 // Fonction pour afficher les données CBOR
 void displayDataCBOR(CborValue& data) {
-  //Serial.println(F("Traitement des données d'écran..."));
+  Serial.println(F("Traitement des données d'écran..."));
 
   // Désactiver les interruptions pendant l'affichage
   noInterrupts();
 
-  // Gestion des textes
+  // Vérifier si c'est un écran système
+  CborValue screenValue;
+  if (cbor_value_map_find_value(&data, "s", &screenValue) == CborNoError && cbor_value_is_map(&screenValue)) {
+    Serial.println(F("Données système détectées"));
+    
+    // Effacer l'écran si nécessaire
+    if (lastScreen != 's') {
+      clearScreen();
+      lastScreen = 's';
+    }
+    
+    // Afficher le titre
+    CborValue titleValue;
+    if (cbor_value_map_find_value(&screenValue, "title", &titleValue) == CborNoError) {
+      if (cbor_value_is_text_string(&titleValue)) {
+        char title[50];
+        size_t len;
+        cbor_value_calculate_string_length(&titleValue, &len);
+        if (len < sizeof(title)) {
+          cbor_value_copy_text_string(&titleValue, title, &len, NULL);
+          writeText(10, 10, 2, GC9A01A_WHITE, title);
+        }
+      }
+    }
+    
+    // Afficher les items
+    CborValue itemsValue;
+    if (cbor_value_map_find_value(&screenValue, "items", &itemsValue) == CborNoError && 
+        cbor_value_is_array(&itemsValue)) {
+      
+      size_t itemCount = 0;
+      cbor_value_get_array_length(&itemsValue, &itemCount);
+      Serial.print(F("Nombre d'items: "));
+      Serial.println(itemCount);
+      
+      CborValue itemIt;
+      cbor_value_enter_container(&itemsValue, &itemIt);
+      
+      int yPos = 40; // Position Y de départ pour les items
+      
+      while (!cbor_value_at_end(&itemIt) && cbor_value_is_map(&itemIt)) {
+        CborValue labelValue, valueValue;
+        
+        // Récupérer le label
+        if (cbor_value_map_find_value(&itemIt, "label", &labelValue) == CborNoError &&
+            cbor_value_is_text_string(&labelValue)) {
+          char label[30];
+          size_t len;
+          cbor_value_calculate_string_length(&labelValue, &len);
+          if (len < sizeof(label)) {
+            cbor_value_copy_text_string(&labelValue, label, &len, NULL);
+            writeText(10, yPos, 1, GC9A01A_WHITE, label);
+            writeText(10, yPos, 1, GC9A01A_WHITE, ": ");
+          }
+        }
+        
+        // Récupérer la valeur
+        if (cbor_value_map_find_value(&itemIt, "value", &valueValue) == CborNoError) {
+          char valueStr[20];
+          
+          if (cbor_value_is_text_string(&valueValue)) {
+            size_t len;
+            cbor_value_calculate_string_length(&valueValue, &len);
+            if (len < sizeof(valueStr)) {
+              cbor_value_copy_text_string(&valueValue, valueStr, &len, NULL);
+              writeText(70, yPos, 1, GC9A01A_WHITE, valueStr);
+            }
+          } else if (cbor_value_is_integer(&valueValue)) {
+            int value;
+            cbor_value_get_int(&valueValue, &value);
+            sprintf(valueStr, "%d", value);
+            writeText(70, yPos, 1, GC9A01A_WHITE, valueStr);
+          } else if (cbor_value_is_float(&valueValue)) {
+            double value;
+            cbor_value_get_double(&valueValue, &value);
+            dtostrf(value, 0, 1, valueStr); // 1 décimale
+            writeText(70, yPos, 1, GC9A01A_WHITE, valueStr);
+          }
+        }
+        
+        yPos += 20; // Espacement entre les lignes
+        cbor_value_advance(&itemIt);
+      }
+      
+      cbor_value_leave_container(&itemsValue, &itemIt);
+    }
+    
+    // Réactiver les interruptions après l'affichage
+    interrupts();
+    return;
+  }
+
+  // Gestion des textes (ancien système)
   CborValue textValue;
   if (cbor_value_map_find_value(&data, "t", &textValue) == CborNoError) {
     //Serial.println(F("Clé 't' trouvée"));
