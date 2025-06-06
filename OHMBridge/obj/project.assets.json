@@ -59,7 +59,7 @@
         }
       }
     },
-    ".NETFramework,Version=v4.8/win-x86": {
+    ".NETFramework,Version=v4.8/win7-x86": {
       "Microsoft.NETFramework.ReferenceAssemblies/1.0.3": {
         "type": "package",
         "dependencies": {
@@ -609,11 +609,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\yofer\\Documents\\DIY\\DIY-StreamDeck\\OHMBridge\\OHMBridge.csproj",
+      "projectUniqueName": "C:\\Users\\yofer\\Documents\\GitHub\\DIY-StreamDeck\\OHMBridge\\OHMBridge.csproj",
       "projectName": "OHMBridge",
-      "projectPath": "C:\\Users\\yofer\\Documents\\DIY\\DIY-StreamDeck\\OHMBridge\\OHMBridge.csproj",
+      "projectPath": "C:\\Users\\yofer\\Documents\\GitHub\\DIY-StreamDeck\\OHMBridge\\OHMBridge.csproj",
       "packagesPath": "C:\\Users\\yofer\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\yofer\\Documents\\DIY\\DIY-StreamDeck\\OHMBridge\\obj\\",
+      "outputPath": "C:\\Users\\yofer\\Documents\\GitHub\\DIY-StreamDeck\\OHMBridge\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\yofer\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -639,8 +639,7 @@
         "enableAudit": "true",
         "auditLevel": "low",
         "auditMode": "direct"
-      },
-      "SdkAnalysisLevel": "10.0.100"
+      }
     },
     "frameworks": {
       "net48": {
@@ -661,11 +660,11 @@
             "version": "[7.0.0, )"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.100-preview.4.25258.110\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.403\\RuntimeIdentifierGraph.json"
       }
     },
     "runtimes": {
-      "win-x86": {
+      "win7-x86": {
         "#import": []
       }
     }

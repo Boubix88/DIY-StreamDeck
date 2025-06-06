@@ -22,11 +22,11 @@ const ArduinoPreview: React.FC<ArduinoPreviewProps> = ({ previewData, activeScre
       const type = cmd[0];
       const nums = cmd.slice(1).trim().split(/[, ]+/).map(Number);
       if (type === 'M' || type === 'L') {
-        d += `${type} ${OFFSET_X + nums[0] * SCALE} ${OFFSET_Y + nums[1] * SCALE} `;
+        d += `${type} ${nums[0]} ${nums[1]} `;
       } else if (type === 'H') {
-        d += `${type} ${OFFSET_X + nums[0] * SCALE} `;
+        d += `${type} ${nums[0]} `;
       } else if (type === 'V') {
-        d += `${type} ${OFFSET_Y + nums[0] * SCALE} `;
+        d += `${type} ${nums[0]} `;
       } else if (type === 'Z') {
         d += 'Z ';
       }
@@ -40,36 +40,46 @@ const ArduinoPreview: React.FC<ArduinoPreviewProps> = ({ previewData, activeScre
         <svg width="150" height="150" viewBox="0 0 150 150">
           <circle cx="75" cy="75" r="72" fill="#18181b" stroke="#4ade80" strokeWidth="4" />
           {/* Textes dynamiques */}
-          {screenData && screenData.t && Array.isArray(screenData.t.t) && screenData.t.t.map((item: any, i: number) => (
-            <text
-              key={i}
-              x={((item[0] + OFFSET_X) * SCALE).toFixed(1)}
-              y={((item[1] + OFFSET_Y) * SCALE).toFixed(1)}
-              fill={`#${screenData.t.c || 'fff'}`}
-              fontSize={item[2] ? (item[2] * 5 * SCALE) : 16}
-              textAnchor="middle"
-              alignmentBaseline="middle"
-            >
-              {item[3]}
-            </text>
-          ))}
+          {screenData &&
+            screenData.t &&
+            Array.isArray(screenData.t.t) &&
+            screenData.t.t.map((item: any, i: number) => (
+              <text
+                key={i}
+                x={((item[0] + OFFSET_X) * SCALE).toFixed(1)}
+                y={((item[1] + OFFSET_Y) * SCALE).toFixed(1)}
+                fill={`#${screenData.t.c || 'fff'}`}
+                fontSize={item[2] ? item[2] * 5 * SCALE : 16}
+                textAnchor="middle"
+                alignmentBaseline="middle"
+              >
+                {item[3]}
+              </text>
+            ))}
           {/* SVG dynamiques */}
-          {screenData && screenData.v && Array.isArray(screenData.v) && screenData.v.map((item: any, i: number) => (
-            <path
-              key={i}
-              d={parseSvgPath(item[0])}
-              stroke={`#${item[1]}`}
-              fill="none"
-              strokeWidth={1.5}
-            />
-          ))}
+          {screenData &&
+            screenData.v &&
+            Array.isArray(screenData.v) &&
+            screenData.v.map((item: any, i: number) => (
+              <path
+                key={i}
+                d={parseSvgPath(item[0])}
+                stroke={`#${item[1]}`}
+                fill="none"
+                strokeWidth={1.5}
+              />
+            ))}
           {/* Fallback : numéro d'écran si rien */}
           {!screenData && (
-            <text x="50%" y="50%" textAnchor="middle" fill="#fff" fontSize="28" dy=".3em">{activeScreen + 1}</text>
+            <text x="50%" y="50%" textAnchor="middle" fill="#fff" fontSize="28" dy=".3em">
+              {activeScreen + 1}
+            </text>
           )}
         </svg>
       </div>
-      <div className="mt-2 text-gray-300 text-lg font-bold tracking-wider">Écran {activeScreen + 1}</div>
+      <div className="mt-2 text-gray-300 text-lg font-bold tracking-wider">
+        Écran {activeScreen + 1}
+      </div>
     </div>
   );
 };

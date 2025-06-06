@@ -1,13 +1,39 @@
+import * as path from 'path';
+import * as url from 'url';
+
 import { ReadlineParser } from '@serialport/parser-readline';
 import { encode } from 'cbor-x';
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
-import * as path from 'path';
-import * as url from 'url';
+import { SerialPort } from 'serialport';
+
 import { getSystemInfo } from './ohmReader';
-const { SerialPort } = require('serialport');
+
 
 let mainWindow: BrowserWindow | null = null;
 let port: InstanceType<typeof SerialPort> | null = null;
+
+// --- Fermeture propre du port série à la sortie du process ---
+function closeSerialPortOnExit() {
+  if (port && port.isOpen) {
+    port.close((err: Error | null) => {
+      if (err) {
+        console.error('Erreur lors de la fermeture du port série à la sortie :', err);
+      } else {
+        console.log('Port série fermé proprement à la sortie.');
+      }
+    });
+  }
+}
+process.on('exit', closeSerialPortOnExit);
+process.on('SIGINT', () => {
+  process.exit();
+});
+process.on('SIGTERM', () => {
+  process.exit();
+});
+process.on('uncaughtException', () => {
+  process.exit(1);
+});
 let parser: any = null;
 
 function createWindow() {
@@ -240,10 +266,24 @@ registerIpcHandler('serial:send', async (_, data: any) => {
   }
 
   try {
-    const encodedData = encode(data);
+    // CORRECT : envoi binaire
+    const encodedData = encode(data); // encode() doit retourner un Buffer
+    console.log('CBOR buffer (hex):', encodedData.toString('hex')); // Pour le debug
+    currentPort.write(encodedData); // Envoi binaire
+    //const encodedData = encode(data);
+    // encodedData doit être un Buffer binaire (pas .toString(), pas .toString('hex'))
+    if (!Buffer.isBuffer(encodedData)) {
+      throw new Error('encodedData is not a Buffer!');
+    }
+    console.log('Writing CBOR buffer to port (length: %d):', encodedData.length);
+    // DEBUG : dump les premiers octets envoyés
+    console.log('CBOR sent [0-15]:', Array.from(encodedData.slice(0, 16)).map(v => v.toString(16).padStart(2, '0')).join(' '));
 
-    await new Promise<void>((resolve, reject) => {
-      console.log('Writing data to port...');
+    /*await new Promise<void>((resolve, reject) => {
+      console.log('typeof encodedData:', typeof encodedData);
+      console.log('isBuffer:', Buffer.isBuffer(encodedData));
+      console.log('first 16 bytes:', encodedData.slice(0, 16));
+
       currentPort.write(encodedData, (err: Error | null | undefined) => {
         if (err) {
           console.error('Error writing to port:', err);
@@ -262,7 +302,7 @@ registerIpcHandler('serial:send', async (_, data: any) => {
           }
         });
       });
-    });
+    });*/
 
     return { success: true };
   } catch (error) {

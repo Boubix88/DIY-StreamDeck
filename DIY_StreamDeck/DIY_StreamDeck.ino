@@ -208,225 +208,130 @@ void rainbowCycle(uint8_t wait) {
 }
 
 void processReceivedData() {
-  // Vérifie si le port série est prêt à être écrit
-  if (Serial.availableForWrite()) {
-    // Afficher le debug ici
-  }
-
-  static uint8_t buffer[512];  // Buffer statique pour éviter les allocations répétées
+  static uint8_t buffer[1024];  // Augmenté la taille du buffer
   static size_t bufferPos = 0;
+  static bool inMessage = false;
   static unsigned long lastDataTime = 0;
-  
-  // Lire les données disponibles (maximum 64 octets à la fois)
-  bool dataRead = false;
+  static bool messageComplete = false;
 
-  bool hasCompleteMessage = false;
-  
-  // Lire jusqu'à 64 octets à chaque appel
-  for (int i = 0; i < 256 && Serial.available() > 0; i++) {
-    if (bufferPos < sizeof(buffer) - 1) {
-      uint8_t c = Serial.read();
-      buffer[bufferPos++] = c;
-      lastDataTime = millis();
-      dataRead = true;
-      
-      // Vérifier immédiatement si c'est la fin d'un message
-      if (c == '\n') {
-        hasCompleteMessage = true;
-        break;
-      }
-    } else {
-      // Buffer plein, vider le surplus
-      Serial.read();
+  // Lire les données disponibles
+  while (Serial.available() > 0 && bufferPos < sizeof(buffer) - 1) {
+    uint8_t c = Serial.read();
+    buffer[bufferPos++] = c;
+    lastDataTime = millis();
+    
+    // Détection du début d'un message (0xB9 est le premier octet du message)
+    if (c == 0xB9 && !inMessage) {
+      inMessage = true;
+      bufferPos = 1;  // On garde le 0xB9
+      messageComplete = false;
     }
   }
 
-  
-  // Si on a lu des données mais pas de fin de ligne, on attend la suite
-  /*if (dataRead) {
-    for (size_t i = 0; i < bufferPos; i++) {
-      if (buffer[i] == '\n') {
-        hasCompleteMessage = true;
-        break;
+  // Vérifier si on a un message complet
+  if (inMessage) {
+    // Attendre un peu pour être sûr d'avoir tout le message
+    if (millis() - lastDataTime > 50) {  // Augmenté le timeout à 50ms
+      messageComplete = true;
+    }
+    
+    // Si le buffer est presque plein, traiter quand même
+    if (bufferPos >= sizeof(buffer) - 1) {
+      messageComplete = true;
+    }
+
+    if (messageComplete && bufferPos > 0) {
+      // Afficher les premiers octets pour debug
+      Serial.print(F("\n--- Traitement des données ---\nTaille du message: "));
+      Serial.print(bufferPos);
+      Serial.println(F(" octets"));
+      Serial.print(F("CBOR brut (16 premiers octets): "));
+      for (int i = 0; i < min(16, (int)bufferPos); i++) {
+        if (buffer[i] < 0x10) Serial.print('0');
+        Serial.print(buffer[i], HEX);
+        Serial.print(' ');
       }
-    }
-    if (!hasCompleteMessage) {
-      return;
-    }*/
-  
-  // Si pas de message complet, on attend d'avoir plus de données
-  if (!hasCompleteMessage) {
-    // Si ça fait plus de 100ms depuis la dernière donnée, on considère que le message est incomplet
-    if (millis() - lastDataTime < 15) {
-      return;  // On attend d'avoir un message complet
-    } else if (bufferPos > 0) {
-      // Si on a des données incomplètes après le timeout, on les traite
-      //Serial.println(F("Temps d'attente dépassé, traitement des données incomplètes"));
-    }
-  }
-  
-  if (bufferPos > 0) {
-    /*Serial.println(F("\n--- Traitement des données ---"));
-    Serial.print(F("Octets à traiter: "));
-    Serial.println(bufferPos);*/
-    
-    // Ajouter un terminateur nul pour la sécurité
-    buffer[bufferPos] = '\0';
-    
-    // Désactiver les interruptions pendant le traitement
-    noInterrupts();
-    
-    // Traiter le contenu du buffer
-    size_t bytesToProcess = bufferPos;
-    bufferPos = 0;  // Réinitialiser pour le prochain message
+      Serial.println();
 
-    // Décodage CBOR avec TinyCBOR
-    CborParser parser;
-    CborValue it;
-    CborError err = cbor_parser_init(buffer, bytesToProcess, 0, &parser, &it);
+      // Parser le CBOR
+      CborParser parser;
+      CborValue root;
+      CborError err = cbor_parser_init(buffer, bufferPos, 0, &parser, &root);
 
-    /*Serial.print(F("Erreur CBOR: "));
-    Serial.println(cbor_error_string(err));*/
-
-    if (err == CborNoError && cbor_value_is_map(&it)) {
-      //Serial.println(F("Données CBOR valides (map)"));
-      // Traitement des données CBOR
-      CborValue screenValue;
-      if (cbor_value_map_find_value(&it, "s", &screenValue) == CborNoError && !cbor_value_is_null(&screenValue)) {
-        //Serial.println(F("Données d'écran détectées"));
-        if (lastScreen == 'c') {
-          //Serial.println(F("Nettoyage de l'écran"));
-          clearScreen();
-          lastScreen = 's';
+      if (err != CborNoError) {
+        Serial.print(F("Erreur CBOR: "));
+        Serial.println(cbor_error_string(err));
+      } else {
+        // Afficher le type de la racine
+        CborType type = cbor_value_get_type(&root);
+        Serial.print(F("Type racine: "));
+        switch (type) {
+          case CborArrayType: Serial.println(F("Array")); break;
+          case CborMapType: Serial.println(F("Map")); break;
+          case CborIntegerType: Serial.println(F("Integer")); break;
+          case CborByteStringType: Serial.println(F("Byte String")); break;
+          case CborTextStringType: Serial.println(F("Text String")); break;
+          case CborTagType: Serial.println(F("Tag")); break;
+          case CborSimpleType: Serial.println(F("Simple Type")); break;
+          case CborBooleanType: Serial.println(F("Boolean")); break;
+          case CborNullType: Serial.println(F("Null")); break;
+          case CborUndefinedType: Serial.println(F("Undefined")); break;
+          default: Serial.println(F("Inconnu")); break;
         }
 
-        // Traitement des données d'écran
-        displayDataCBOR(screenValue);
-      } else {
-        //Serial.println(F("Pas de données d'écran ou données invalides"));
-      }
-
-      // Si on reçoit l'ordre de clear l'écran
-      CborValue clearValue;
-      bool clearScreenBool = false;
-      if (cbor_value_map_find_value(&it, "clr", &clearValue) == CborNoError && cbor_value_is_boolean(&clearValue) && cbor_value_get_boolean(&clearValue, &clearScreenBool) == CborNoError && clearScreen) {
-        clearScreen();
-      }
-
-      // Gestion de la couleur du ruban
-      CborValue colorValue;
-      if (cbor_value_map_find_value(&it, "c", &colorValue) == CborNoError) {
-        //Serial.print(F("Type de données de couleur: "));
-        /*if (cbor_value_is_array(&colorValue)) {
-          Serial.println(F("Tableau"));
-        } else if (cbor_value_is_integer(&colorValue)) {
-          Serial.println(F("Entier"));
-        } else {
-          Serial.println(F("Autre"));
-        }*/
-
-        if (cbor_value_is_array(&colorValue)) {
-          // Déterminer la taille du tableau
-          size_t colorDataSize = 0;
-          cbor_value_get_array_length(&colorValue, &colorDataSize);
-          /*Serial.print(F("Taille des données de couleur: rggggg "));
-          Serial.println(colorDataSize);*/
-
-          uint8_t colorData[MAX_COLOR_DATA_SIZE];
-
-          if (colorDataSize > 0 && colorDataSize <= MAX_COLOR_DATA_SIZE) {
-            /*Serial.print(F("Utilisation d'un tableau statique de taille "));
-            Serial.println(MAX_COLOR_DATA_SIZE);*/
-
-            // Initialiser le tableau
-            memset(colorData, 0, sizeof(colorData));
-            //Serial.println(F("Tableau initialisé avec succès"));
-
-            // Entrer dans le tableau
-            CborValue arrayIt;
-            CborError enterErr = cbor_value_enter_container(&colorValue, &arrayIt);
-            /*Serial.print(F("Entrée dans le conteneur CBOR: "));
-            Serial.println(cbor_error_string(enterErr));*/
-
-            // Vérifier le type du conteneur
-            /*Serial.print(F("Type du conteneur: "));
-            if (cbor_value_is_array(&arrayIt)) {
-              Serial.println(F("Tableau"));
-            } else if (cbor_value_is_map(&arrayIt)) {
-              Serial.println(F("Map"));
+        // Si c'est une map, essayer d'extraire les données
+        if (cbor_value_is_map(&root)) {
+          CborValue screenValue;
+          if (cbor_value_map_find_value(&root, "s", &screenValue) == CborNoError) {
+            if (cbor_value_is_map(&screenValue)) {
+              displayDataCBOR_minimal(screenValue);
             } else {
-              Serial.println(F("Autre"));
-            }*/
-
-            // Remplir le tableau dynamique avec les valeurs
-            //Serial.println(F("Valeurs de couleur reçues :"));
-            for (size_t i = 0; i < colorDataSize && !cbor_value_at_end(&arrayIt); i++) {
-              if (cbor_value_is_integer(&arrayIt)) {
-                int value;
-                CborError err = cbor_value_get_int(&arrayIt, &value);
-                if (err == CborNoError) {
-                  colorData[i] = (uint8_t)value;
-                  /*Serial.print(F("  ["));
-                  Serial.print(i);
-                  Serial.print(F("] = "));
-                  Serial.println((int)colorData[i]);*/
-                } else {
-                  /*Serial.print(F("Erreur lecture valeur à l'index "));
-                  Serial.print(i);
-                  Serial.print(F(": "));
-                  Serial.println(cbor_error_string(err));*/
-                }
-              } else {
-                /*Serial.print(F("Type de valeur inattendu à l'index "));
-                Serial.println(i);*/
-              }
-              cbor_value_advance(&arrayIt);
+              Serial.println(F("La valeur de 's' n'est pas une map"));
             }
-
-            // Sortir du tableau
-            cbor_value_leave_container(&colorValue, &arrayIt);
-
-            // Afficher le contenu du tableau pour débogage
-            /*Serial.println(F("Contenu du tableau de couleurs :"));
-            for (size_t i = 0; i < colorDataSize; i++) {
-              Serial.print(F("  colorData["));
-              Serial.print(i);
-              Serial.print(F("] = "));
-              Serial.println((int)colorData[i]);
-            }*/
-
-            // Utiliser le tableau pour traiter les données
-            switch (colorData[0]) {
-              case MODE_STATIC:
-                setStaticLedColor(colorData[1], colorData[2], colorData[3]);
-                break;
-              case MODE_SCROLLING_STATIC:
-                // Les données sont dans l'ordre [MODE, R, G, B, SPEED]
-                setStaticLedColor(colorData[1], colorData[2], colorData[3]);
-                rainbow(colorData[4]);  // Utiliser l'index 4 pour la vitesse
-                break;
-              case MODE_SCROLLING_RGB:
-                rainbowCycle(colorData[4]);  // Utiliser l'index 4 pour la vitesse
-                break;
-            }
-
-            // Pas besoin de libérer la mémoire car c'est un tableau statique
           } else {
-            /*Serial.print(F("Taille des données invalide : "));
-            Serial.println(colorDataSize);*/
+            Serial.println(F("Clé 's' non trouvée dans la racine"));
+          }
+          
+          // Gestion des couleurs RGB
+          CborValue colorValue;
+          if (cbor_value_map_find_value(&root, "c", &colorValue) == CborNoError) {
+            if (cbor_value_is_array(&colorValue)) {
+              CborValue colorElement;
+              cbor_value_enter_container(&colorValue, &colorElement);
+              
+              uint8_t r = 0, g = 0, b = 0, mode = 0, speed = 0;
+              int i = 0;
+              
+              while (!cbor_value_at_end(&colorElement)) {
+                int val = 0;
+                cbor_value_get_int(&colorElement, &val);
+                
+                switch (i) {
+                  case 0: mode = (uint8_t)val; break;
+                  case 1: r = (uint8_t)val; break;
+                  case 2: g = (uint8_t)val; break;
+                  case 3: b = (uint8_t)val; break;
+                  case 4: speed = (uint8_t)val; break;
+                }
+                
+                cbor_value_advance(&colorElement);
+                i++;
+              }
+              
+              // Appliquer la couleur
+              if (mode == 1) { // Mode couleur statique
+                setStaticLedColor(r, g, b);
+              }
+            }
           }
         }
       }
+      
+      // Réinitialiser pour le prochain message
+      inMessage = false;
+      bufferPos = 0;
+      Serial.println(F("--- Fin du traitement ---"));
     }
-  }
-  
-  // Réactiver les interruptions après le traitement
-  interrupts();
-  
-  // Si on arrive ici sans avoir traité de message valide, on nettoie
-  if (bufferPos > 0) {
-    //Serial.println(F("Aucun message valide reçu, nettoyage du buffer"));
-    bufferPos = 0;
   }
 }
 
@@ -441,13 +346,13 @@ void displayDataCBOR(CborValue& data) {
   CborValue screenValue;
   if (cbor_value_map_find_value(&data, "s", &screenValue) == CborNoError && cbor_value_is_map(&screenValue)) {
     Serial.println(F("Données système détectées"));
-    
+
     // Effacer l'écran si nécessaire
     if (lastScreen != 's') {
       clearScreen();
       lastScreen = 's';
     }
-    
+
     // Afficher le titre
     CborValue titleValue;
     if (cbor_value_map_find_value(&screenValue, "title", &titleValue) == CborNoError) {
@@ -461,28 +366,26 @@ void displayDataCBOR(CborValue& data) {
         }
       }
     }
-    
+
     // Afficher les items
     CborValue itemsValue;
-    if (cbor_value_map_find_value(&screenValue, "items", &itemsValue) == CborNoError && 
-        cbor_value_is_array(&itemsValue)) {
-      
+    if (cbor_value_map_find_value(&screenValue, "items", &itemsValue) == CborNoError && cbor_value_is_array(&itemsValue)) {
+
       size_t itemCount = 0;
       cbor_value_get_array_length(&itemsValue, &itemCount);
       Serial.print(F("Nombre d'items: "));
       Serial.println(itemCount);
-      
+
       CborValue itemIt;
       cbor_value_enter_container(&itemsValue, &itemIt);
-      
-      int yPos = 40; // Position Y de départ pour les items
-      
+
+      int yPos = 40;  // Position Y de départ pour les items
+
       while (!cbor_value_at_end(&itemIt) && cbor_value_is_map(&itemIt)) {
         CborValue labelValue, valueValue;
-        
+
         // Récupérer le label
-        if (cbor_value_map_find_value(&itemIt, "label", &labelValue) == CborNoError &&
-            cbor_value_is_text_string(&labelValue)) {
+        if (cbor_value_map_find_value(&itemIt, "label", &labelValue) == CborNoError && cbor_value_is_text_string(&labelValue)) {
           char label[30];
           size_t len;
           cbor_value_calculate_string_length(&labelValue, &len);
@@ -492,11 +395,11 @@ void displayDataCBOR(CborValue& data) {
             writeText(10, yPos, 1, GC9A01A_WHITE, ": ");
           }
         }
-        
+
         // Récupérer la valeur
         if (cbor_value_map_find_value(&itemIt, "value", &valueValue) == CborNoError) {
           char valueStr[20];
-          
+
           if (cbor_value_is_text_string(&valueValue)) {
             size_t len;
             cbor_value_calculate_string_length(&valueValue, &len);
@@ -512,18 +415,18 @@ void displayDataCBOR(CborValue& data) {
           } else if (cbor_value_is_float(&valueValue)) {
             double value;
             cbor_value_get_double(&valueValue, &value);
-            dtostrf(value, 0, 1, valueStr); // 1 décimale
+            dtostrf(value, 0, 1, valueStr);  // 1 décimale
             writeText(70, yPos, 1, GC9A01A_WHITE, valueStr);
           }
         }
-        
-        yPos += 20; // Espacement entre les lignes
+
+        yPos += 20;  // Espacement entre les lignes
         cbor_value_advance(&itemIt);
       }
-      
+
       cbor_value_leave_container(&itemsValue, &itemIt);
     }
-    
+
     // Réactiver les interruptions après l'affichage
     interrupts();
     return;
@@ -531,7 +434,7 @@ void displayDataCBOR(CborValue& data) {
 
   // Gestion des textes (ancien système)
   CborValue textValue;
-  if (cbor_value_map_find_value(&data, "t", &textValue) == CborNoError) {
+  /*if (cbor_value_map_find_value(&data, "t", &textValue) == CborNoError) {
     //Serial.println(F("Clé 't' trouvée"));
 
     if (cbor_value_is_map(&textValue)) {
@@ -545,10 +448,11 @@ void displayDataCBOR(CborValue& data) {
 
         if (cbor_value_is_text_string(&colorValue)) {
           size_t len;
-          char colorStr[8];  // Assez grand pour "#RRGGBB\0"
+          char colorStr[8] = { 0 };  // Initialisation à zéro
           cbor_value_calculate_string_length(&colorValue, &len);
           if (len < sizeof(colorStr)) {
             cbor_value_copy_text_string(&colorValue, colorStr, &len, NULL);
+            colorStr[len] = '\0';  // Assure la terminaison de la chaîne
             Serial.print(F("Couleur du texte: "));
             Serial.println(colorStr);
             textColor = hexToColor565(colorStr);
@@ -572,54 +476,180 @@ void displayDataCBOR(CborValue& data) {
           Serial.println(textCount);
 
           CborValue arrayIt;
-          cbor_value_enter_container(&textArrayValue, &arrayIt);
+          CborError enterErr = cbor_value_enter_container(&textArrayValue, &arrayIt);
+          if (enterErr != CborNoError) {
+            Serial.print(F("ERREUR: Impossible d'entrer dans le conteneur: "));
+            Serial.println(enterErr);
+            return;
+          }
 
           int textIndex = 0;
-          while (!cbor_value_at_end(&arrayIt)) {
-            Serial.print(F("\nTraitement du texte #"));
-            Serial.println(++textIndex);
+          const int MAX_TEXTS = 20;  // Sécurité contre les boucles infinies
+          Serial.println(F("Début du traitement des textes..."));
+
+          while (!cbor_value_at_end(&arrayIt) && textIndex < MAX_TEXTS) {
+            textIndex++;
+            Serial.print(F("\n--- Traitement du texte #"));
+            /*Serial.print(textIndex);
+            Serial.println(" ---");
+            Serial.flush();
+
+            // Vérification de l'état du conteneur
+            /*Serial.print(F("Type de l'élément: "));
+            if (cbor_value_is_array(&arrayIt)) {
+              Serial.println(F("Tableau"));
+            } else if (cbor_value_is_map(&arrayIt)) {
+              Serial.println(F("Map"));
+            } else if (cbor_value_is_text_string(&arrayIt)) {
+              Serial.println(F("Texte"));
+            } else if (cbor_value_is_integer(&arrayIt)) {
+              Serial.println(F("Entier"));
+            } else {
+              Serial.println(F("Type inconnu"));
+            }
+
+            // Vérification de la mémoire
+            Serial.print(F("Mémoire libre: "));
+            Serial.println(freeMemory());
+
+            // Petite pause pour la communication série
+            delay(5);
+
+            // L'incrémentation est déjà faite au début de la boucle
+
+            // Afficher le type de la valeur courante
+            Serial.print(F("Type de la valeur: "));
+            if (cbor_value_is_array(&arrayIt)) {
+              //Serial.println(F("Tableau"));
+            } else if (cbor_value_is_map(&arrayIt)) {
+              //Serial.println(F("Map"));
+            } else if (cbor_value_is_text_string(&arrayIt)) {
+              //Serial.println(F("Chaine de texte"));
+            } else if (cbor_value_is_integer(&arrayIt)) {
+              //Serial.println(F("Entier"));
+            } else {
+              //Serial.println(F("Type inconnu"));
+              // Avancer à l'élément suivant en cas de type inconnu
+              cbor_value_advance(&arrayIt);
+              continue;
+            }
+
+            // Vérifier la mémoire disponible
+            Serial.print(F("Memoire libre: "));
+            Serial.println(freeMemory());
 
             if (cbor_value_is_array(&arrayIt)) {
-              // Traiter chaque ligne de texte
               CborValue lineIt;
-              cbor_value_enter_container(&arrayIt, &lineIt);
+              CborError err = cbor_value_enter_container(&arrayIt, &lineIt);
+              if (err != CborNoError) {
+                Serial.print(F("Erreur entrée conteneur: "));
+                Serial.println(err);
+                break;
+              }
 
               // Lire les 4 éléments de la ligne
-              int x = 0, y = 0, size = 0;
-              char content[50] = "";  // Taille maximale pour le contenu texte
+              int x = 0, y = 0, size = 1;  // Taille par défaut à 1
+              char content[100] = "";      // Augmenté la taille du buffer
 
               // X
               if (!cbor_value_at_end(&lineIt) && cbor_value_is_integer(&lineIt)) {
                 cbor_value_get_int(&lineIt, &x);
                 cbor_value_advance(&lineIt);
+                Serial.print(F("X: "));
+                Serial.println(x);
               }
 
               // Y
               if (!cbor_value_at_end(&lineIt) && cbor_value_is_integer(&lineIt)) {
                 cbor_value_get_int(&lineIt, &y);
                 cbor_value_advance(&lineIt);
+                Serial.print(F("Y: "));
+                Serial.println(y);
               }
 
               // Size
               if (!cbor_value_at_end(&lineIt) && cbor_value_is_integer(&lineIt)) {
                 cbor_value_get_int(&lineIt, &size);
                 cbor_value_advance(&lineIt);
+                Serial.print(F("Taille: "));
+                Serial.println(size);
               }
 
               // Content
-              if (!cbor_value_at_end(&lineIt) && cbor_value_is_text_string(&lineIt)) {
-                size_t len;
-                cbor_value_calculate_string_length(&lineIt, &len);
-                if (len < sizeof(content)) {
-                  cbor_value_copy_text_string(&lineIt, content, &len, NULL);
-                  writeText(x, y, size, textColor, content);
+              if (!cbor_value_at_end(&lineIt)) {
+                Serial.print(F("Type du contenu: "));
+                if (cbor_value_is_text_string(&lineIt)) {
+                  Serial.println(F("Chaine de texte"));
+                  size_t len;
+                  CborError err = cbor_value_calculate_string_length(&lineIt, &len);
+                  if (err != CborNoError) {
+                    Serial.print(F("Erreur calcul longueur: "));
+                    Serial.println(err);
+                  } else {
+                    Serial.print(F("Longueur du texte: "));
+                    Serial.println(len);
+                    if (len < sizeof(content)) {
+                      Serial.print(F("Tentative de copie du texte... "));
+                      err = cbor_value_copy_text_string(&lineIt, content, &len, &lineIt);
+                      Serial.print(F("Résultat: "));
+                      Serial.println(err == CborNoError ? "Succès" : "Échec");
+                      
+                      if (err != CborNoError) {
+                        Serial.print(F("Erreur copie texte: "));
+                        Serial.println(err);
+                        // Essayer de récupérer le type actuel après l'erreur
+                        Serial.print(F("Type après erreur: "));
+                        if (cbor_value_is_text_string(&lineIt)) Serial.println(F("Texte"));
+                        else if (cbor_value_is_integer(&lineIt)) Serial.println(F("Entier"));
+                        else if (cbor_value_is_float(&lineIt)) Serial.println(F("Flottant"));
+                        else if (cbor_value_is_byte_string(&lineIt)) Serial.println(F("Octets"));
+                        else if (cbor_value_is_array(&lineIt)) Serial.println(F("Tableau"));
+                        else if (cbor_value_is_map(&lineIt)) Serial.println(F("Map"));
+                        else Serial.println(F("Inconnu"));
+                      } else {
+                        content[len] = '\0';  // Assure la terminaison
+                        Serial.print(F("Texte: \""));
+                        Serial.print(content);
+                        Serial.println(F("\""));
+                        writeText(x, y, size, textColor, content);
+                      }
+                    } else {
+                      Serial.print(F("Erreur: Texte trop long (max: "));
+                      Serial.print(sizeof(content) - 1);
+                      Serial.print(F("): "));
+                      Serial.println(len);
+                    }
+                  }
+                } else {
+                  Serial.print(F("Type inattendu (attendu: texte), type actuel: "));
+                  if (cbor_value_is_integer(&lineIt)) Serial.println(F("Entier"));
+                  else if (cbor_value_is_float(&lineIt)) Serial.println(F("Flottant"));
+                  else if (cbor_value_is_byte_string(&lineIt)) Serial.println(F("Octets"));
+                  else if (cbor_value_is_array(&lineIt)) Serial.println(F("Tableau"));
+                  else if (cbor_value_is_map(&lineIt)) Serial.println(F("Map"));
+                  else Serial.println(F("Inconnu"));
                 }
+                cbor_value_advance(&lineIt);
               }
 
               // Sortir du tableau de ligne
               cbor_value_leave_container(&arrayIt, &lineIt);
+              Serial.println("Sortie du conteneur de ligne");
+            } else {
+              Serial.println("ERREUR: Le conteneur n'est pas un tableau");
             }
-            cbor_value_advance(&arrayIt);
+
+            // Avancer à l'élément suivant
+            Serial.println("Avancement à l'élément suivant...");
+            CborError advanceErr = cbor_value_advance(&arrayIt);
+            if (advanceErr != CborNoError) {
+              Serial.print(F("ERREUR avancement: "));
+              Serial.println(advanceErr);
+              // Essayer de se remettre en cas d'erreur
+              cbor_value_leave_container(&textArrayValue, &arrayIt);
+              interrupts();
+              return;
+            }
           }
 
           // Sortir du tableau de textes
@@ -629,7 +659,7 @@ void displayDataCBOR(CborValue& data) {
 
       // Gestion des SVG
       CborValue svgValue;
-      if (cbor_value_map_find_value(&data, "v", &svgValue) == CborNoError && cbor_value_is_array(&svgValue)) {
+      /*if (cbor_value_map_find_value(&data, "v", &svgValue) == CborNoError && cbor_value_is_array(&svgValue)) {
 
         // Vérifier si on doit effacer la zone des SVG
         CborValue vcValue;
@@ -688,19 +718,183 @@ void displayDataCBOR(CborValue& data) {
       // Réactiver les interruptions après l'affichage
       interrupts();
     }
+  }*/
+}
+
+// --- Parsing CBOR minimaliste pour debug ---
+void displayDataCBOR_minimal(CborValue &screen) {
+  if (!cbor_value_is_map(&screen)) {
+      Serial.println(F("Erreur: 'screen' n'est pas une map"));
+      return;
+  }
+
+  CborValue textValue, vectorValue;
+  
+  // Traiter les textes
+  if (cbor_value_map_find_value(&screen, "t", &textValue) == CborNoError && 
+      cbor_value_is_map(&textValue)) {
+      
+      CborValue textArray, colorValue;
+      
+      // Récupérer le tableau de textes
+      if (cbor_value_map_find_value(&textValue, "t", &textArray) == CborNoError && 
+          cbor_value_is_array(&textArray)) {
+          
+          CborValue textItem;
+          cbor_value_enter_container(&textArray, &textItem);
+          
+          while (!cbor_value_at_end(&textItem)) {
+              if (cbor_value_is_array(&textItem)) {
+                  CborValue textElement;
+                  cbor_value_enter_container(&textItem, &textElement);
+                  
+                  int x = 0, y = 0, size = 0;
+                  char text[64] = {0};
+                  int i = 0;
+                  
+                  while (!cbor_value_at_end(&textElement)) {
+                      if (i == 0) cbor_value_get_int(&textElement, &x);
+                      else if (i == 1) cbor_value_get_int(&textElement, &y);
+                      else if (i == 2) cbor_value_get_int(&textElement, &size);
+                      else if (i == 3 && cbor_value_is_text_string(&textElement)) {
+                          size_t len = sizeof(text) - 1;
+                          cbor_value_copy_text_string(&textElement, text, &len, NULL);
+                      }
+                      
+                      cbor_value_advance(&textElement);
+                      i++;
+                  }
+                  
+                  // Afficher le texte
+                  Serial.print(F("Texte: x="));
+                  Serial.print(x);
+                  Serial.print(F(" y="));
+                  Serial.print(y);
+                  Serial.print(F(" taille="));
+                  Serial.print(size);
+                  Serial.print(F(" contenu="));
+                  Serial.println(text);
+                  
+                  writeText(x, y, size, GC9A01A_WHITE, text);
+                  
+                  cbor_value_leave_container(&textItem, &textElement);
+              }
+              cbor_value_advance(&textItem);
+          }
+          cbor_value_leave_container(&textArray, &textItem);
+      }
+      
+      // Récupérer la couleur du texte
+      if (cbor_value_map_find_value(&textValue, "c", &colorValue) == CborNoError && 
+          cbor_value_is_text_string(&colorValue)) {
+          char colorStr[16] = {0};
+          size_t len = sizeof(colorStr) - 1;
+          cbor_value_copy_text_string(&colorValue, colorStr, &len, NULL);
+          Serial.print(F("Couleur texte: #"));
+          Serial.println(colorStr);
+      }
+  }
+  
+  // Traiter les vecteurs (SVG)
+  if (cbor_value_map_find_value(&screen, "v", &vectorValue) == CborNoError && 
+      cbor_value_is_array(&vectorValue)) {
+      
+      CborValue vectorItem;
+      cbor_value_enter_container(&vectorValue, &vectorItem);
+      
+      while (!cbor_value_at_end(&vectorItem)) {
+          if (cbor_value_is_array(&vectorItem)) {
+              CborValue svgElement;
+              cbor_value_enter_container(&vectorItem, &svgElement);
+              
+              char svgPath[512] = {0};
+              char colorStr[16] = {0};
+              int i = 0;
+              
+              while (!cbor_value_at_end(&svgElement)) {
+                  if (i == 0 && cbor_value_is_text_string(&svgElement)) {
+                      size_t len = sizeof(svgPath) - 1;
+                      cbor_value_copy_text_string(&svgElement, svgPath, &len, NULL);
+                  }
+                  else if (i == 1 && cbor_value_is_text_string(&svgElement)) {
+                      size_t len = sizeof(colorStr) - 1;
+                      cbor_value_copy_text_string(&svgElement, colorStr, &len, NULL);
+                  }
+                  
+                  cbor_value_advance(&svgElement);
+                  i++;
+              }
+              
+              // Dessiner le SVG
+              Serial.print(F("SVG Path: "));
+              Serial.println(svgPath);
+              Serial.print(F("Couleur SVG: #"));
+              Serial.println(colorStr);
+              
+              uint16_t color = hexToColor565(colorStr);
+              drawSVGPath(svgPath, color);
+              
+              cbor_value_leave_container(&vectorItem, &svgElement);
+          }
+          cbor_value_advance(&vectorItem);
+      }
+      cbor_value_leave_container(&vectorValue, &vectorItem);
   }
 }
 
 uint16_t hexToColor565(const char* hexColor) {
-  // Optimisation pour la conversion de couleur hexadécimale
-  uint32_t rgb = strtol(hexColor, NULL, 16);  // Convertir la chaîne hexadécimale directement
+  if (!hexColor || *hexColor == '\0') {
+    return 0xFFFF;  // Retourne blanc en cas d'erreur
+  }
 
-  // Conversion directe sans allocations supplémentaires
-  uint8_t r = (rgb >> 16) & 0xFF;
-  uint8_t g = (rgb >> 8) & 0xFF;
-  uint8_t b = rgb & 0xFF;
+  // Sauter le # s'il est présent
+  if (hexColor[0] == '#') {
+    hexColor++;
+  }
 
-  return tft.color565(r, g, b);  // Retourner la couleur dans le format attendu
+  // Vérifier la longueur minimale
+  size_t len = strlen(hexColor);
+  if (len < 3) {    // Au moins 3 caractères nécessaires (R, G, B)
+    return 0xFFFF;  // Retourne blanc en cas d'erreur
+  }
+
+  // Vérifier que tous les caractères sont hexadécimaux
+  for (size_t i = 0; i < len && i < 6; i++) {
+    if (!isxdigit(hexColor[i])) {
+      return 0xFFFF;  // Retourne blanc en cas d'erreur
+    }
+  }
+
+  // Convertir la chaîne hexadécimale en valeurs RGB
+  char* endptr;
+  long number = strtol(hexColor, &endptr, 16);
+
+  // Vérifier la conversion
+  if (endptr == hexColor) {
+    return 0xFFFF;  // Aucun chiffre valide trouvé
+  }
+
+  // Extraire les composants RVB
+  uint8_t r, g, b;
+  if (len <= 4) {
+    // Format court: #RGB ou #RGBA
+    r = (number >> 8) & 0x0F;
+    g = (number >> 4) & 0x0F;
+    b = number & 0x0F;
+    // Étendre les 4 bits à 8 bits
+    r = (r << 4) | r;
+    g = (g << 4) | g;
+    b = (b << 4) | b;
+  } else {
+    // Format long: #RRGGBB ou #RRGGBBAA
+    r = (number >> 16) & 0xFF;
+    g = (number >> 8) & 0xFF;
+    b = number & 0xFF;
+  }
+
+  // Convertir en format 565 (5-6-5 bits)
+  // 5 bits pour le rouge, 6 pour le vert, 5 pour le bleu
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
 void drawSVGPath(const char* svgPath, uint16_t color) {
@@ -795,11 +989,14 @@ void setup() {
   volDownButtonReg = PIN_TO_BASEREG(BOUTON_VOL_DOWN);
   volDownButtonMask = PIN_TO_BITMASK(BOUTON_VOL_DOWN);
 
-  // Initialisation de la communication série avec un timeout 
-  Serial.begin(115200);
+  // Initialisation de la communication série avec un timeout
+  Serial.begin(115200, SERIAL_8N1);
   Serial.setTimeout(100);  // Définir un timeout court pour éviter les blocages
 
-  // begin HID connection 
+  Serial.setTimeout(50);  // Timeout court
+  Serial.flush();  // Vide les buffers
+
+  // begin HID connection
   Consumer.begin();
 
   // Initialisation des leds
@@ -822,6 +1019,26 @@ void setup() {
   while (!Serial) {
     startScreen();
   }
+}
+
+// Fonction pour vérifier la mémoire disponible
+#ifdef __arm__
+// should use uinstd.h to define sbrk but Due causes a conflict
+extern "C" char* sbrk(int incr);
+#else   // __ARM__
+extern char* __brkval;
+extern char __bss_end;
+#endif  // __arm__
+
+int freeMemory() {
+  char top;
+#ifdef __arm__
+  return &top - reinterpret_cast<char*>(sbrk(0));
+#elif defined(CORE_TEENSY) || (ARDUINO > 103 && ARDUINO != 151)
+  return &top - __brkval;
+#else   // __arm__
+  return __brkval ? &top - __brkval : &top - &__bss_end;
+#endif  // __arm__
 }
 
 // Fonction pour vider le buffer série (utilisée uniquement en cas d'erreur)

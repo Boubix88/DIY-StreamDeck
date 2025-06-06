@@ -26,9 +26,9 @@ interface ScreenData {
 }
 
 const App: React.FC = () => {
-  const [timeInterval, setTimeInterval] = useState<number>(1000);
+  const [timeInterval, setTimeInterval] = useState<number>(5000);
   const [activeScreen, setActiveScreen] = useState<number>(0);
-  const { cpuInfo, cpuTemperature, gpuInfo, ramInfo, networkInfo } = useSystemInfo(timeInterval);
+  const { cpuInfo, cpuTemperature, gpuInfo, ramInfo, networkInfo } = useSystemInfo(timeInterval * 50);
 
   // Assignations locales (à relier à la persistance plus tard)
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -52,7 +52,7 @@ const App: React.FC = () => {
   // --- RGB State ---
   const [mode, setMode] = useState(0);
   const [color, setColor] = useState({ r: 0, g: 255, b: 128 });
-  const [speed, setSpeed] = useState(10);
+  const [speed, setSpeed] = useState(50);
 
   // --- Construction dynamique du payload Arduino ---
   // (Inspiré du Python: data = {"s": screenData, "c": colorData, "clr": bool(clear) })
@@ -62,14 +62,16 @@ const App: React.FC = () => {
     const cpuScreen = {
       t: {
         t: [
-          [60, 40, 4, `CPU ${cpuInfo?.usage ?? '--'}%`],
-          [120, 80, 3, `Freq ${cpuInfo?.frequency ? cpuInfo.frequency + 'GHz' : '--'}`],
-          [120, 120, 2, `Proc ${cpuInfo?.processCount ?? '--'}`],
+          [20, 60, 3, `${cpuTemperature?.main ?? '--'}C`],
+          [160, 60, 3, `${cpuInfo?.usage ?? '--'}%`],
+          [20, 170, 3, `${cpuInfo?.frequency ? (cpuInfo.frequency / 1000).toFixed(1) + 'GHz' : '--'}`],
+          [160, 170, 3, `${cpuInfo?.processCount ?? '--'}`],
+          [90, 110, 4, `CPU`],
         ],
-        c: "00FF00"
+        c: "0000FF"
       },
       v: [
-        ["M 10 120 L 120 10 L 200 120 Z", "FF0000"] // Ex: triangle décoratif
+        ["M161 86H85V161H161ZM188 132H164V140H188V154H164V166H152V191H137V166H131V191H115V166H108V191H95V166H82V154H58V140H82V132H58V118H82V109H58V96H82V84H95V60H108V84H115V60H131V84H137V60H152V84H164V96H188V109H164V118H188V132", "0000FF"] // Ex: triangle décoratif
       ]
     };
     // --- GPU ---
@@ -117,7 +119,7 @@ const App: React.FC = () => {
     const screens = [cpuScreen, gpuScreen, ramScreen, netScreen];
     // --- RGB/Mode/Brightness/Speed ---
     // Format: [mode, r, g, b, brightness, speed]
-    const colorData = [mode, color.r, color.g, color.b, 100, speed];
+    const colorData = [mode + 1, color.r, color.g, color.b, speed];
     // --- Clear flag (ex: reset écran) ---
     const clear = false; // À relier à un bouton plus tard
     // --- Payload complet ---
@@ -127,10 +129,25 @@ const App: React.FC = () => {
       clr: clear
     };
   }
+
+  const [connectedPort, setConnectedPort] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (!connectedPort) return;
+    const interval = setInterval(() => {
+      // On reconstruit le payload à chaque tick
+      const payload = buildArduinoPayload();
+      // Appel à la fonction qui envoie sur le port série
+      window.electronAPI.invoke('serial:send', payload);
+      // Pour debug :
+      // console.log('Payload envoyé à l\'Arduino :', payload);
+    }, 1000); // toutes les 1 seconde
+  
+    return () => clearInterval(interval);
+  }, [connectedPort, cpuInfo, gpuInfo, ramInfo, networkInfo, mode, color, speed, activeScreen]);
   
   // --- Gestion port série et terminal ---
   const [ports, setPorts] = useState<{ path: string; manufacturer?: string }[]>([]);
-  const [connectedPort, setConnectedPort] = useState<string | null>(null);
   const [serialLogs, setSerialLogs] = useState<string[]>([]);
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -146,8 +163,11 @@ const App: React.FC = () => {
       }
     }
     refreshPorts();
-    const interval = setInterval(refreshPorts, 2000);
-    return () => { mounted = false; clearInterval(interval); };
+    const interval = setInterval(refreshPorts, 500);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Connexion série (IPC)
@@ -261,7 +281,10 @@ const App: React.FC = () => {
               value={timeInterval}
               onChange={e => setTimeInterval(Number(e.target.value))}
             >
-              <option value={500}>0.5s</option>
+              <option value={50}>50ms</option>
+              <option value={100}>100ms</option>
+              <option value={200}>200ms</option>
+              <option value={500}>500ms</option>
               <option value={1000}>1s</option>
               <option value={2000}>2s</option>
               <option value={5000}>5s</option>

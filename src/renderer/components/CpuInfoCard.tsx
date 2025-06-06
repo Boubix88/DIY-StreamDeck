@@ -13,9 +13,13 @@ const CpuInfoCard: React.FC<CpuInfoCardProps> = ({ cpuInfo, cpuTemperature }) =>
       <span className="text-lg font-bold tracking-widest text-green-300">CPU</span>
     </div>
     <div className="text-xs text-gray-400">Temp</div>
-    <div className="text-xl font-extrabold text-white mb-1">{Math.round(cpuTemperature?.main || 0)}°C</div>
+    <div className="text-xl font-extrabold text-white mb-1">
+      {Math.round(cpuTemperature?.main || 0)}°C
+    </div>
     <div className="text-xs text-gray-400">Usage</div>
-    <div className="text-lg font-bold text-green-200">{cpuInfo?.frequency ? (cpuInfo.frequency / 1000).toFixed(1) : 'N/A'} GHz</div>
+    <div className="text-lg font-bold text-green-200">
+      {cpuInfo?.frequency ? (cpuInfo.frequency / 1000).toFixed(1) : 'N/A'} GHz
+    </div>
     <div className="text-xs text-gray-400 mt-1">Processus: {cpuInfo?.processCount}</div>
   </div>
 );
