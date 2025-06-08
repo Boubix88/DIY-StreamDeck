@@ -1,4 +1,5 @@
 import * as si from 'systeminformation';
+import loudness from 'loudness';
 
 export interface CpuInfo {
   // Propriétés de base
@@ -445,20 +446,45 @@ export const getNetworkInfo = async (): Promise<NetworkInfo> => {
   }
 };
 
+// Fonction pour obtenir le volume système
+async function getVolumeInfo(): Promise<number> {
+  try {
+    //console.log('Tentative de récupération du volume système...');
+    const volume = await loudness.getVolume();
+    //console.log('Volume système récupéré avec succès:', volume);
+    return volume;
+  } catch (error) {
+    console.error('Erreur lors de la récupération du volume système:', error);
+    if (error instanceof Error) {
+      console.error('Détails de l\'erreur:', error.message);
+      console.error('Stack trace:', error.stack);
+    }
+    return 0;
+  }
+}
+
 export const getAllSystemInfo = async () => {
   try {
-    const [cpu, gpu, ram, network] = await Promise.all([
+    /*const [cpu, gpu, ram, network, volume] = await Promise.all([
       getCpuInfo(),
       getGpuInfo(),
       getRamInfo(),
-      getNetworkInfo()
-    ]);
+      getNetworkInfo(),
+      getVolumeInfo()
+    ]);*/
+
+    const cpu = await getCpuInfo();
+    const gpu = await getGpuInfo();
+    const ram = await getRamInfo();
+    const network = await getNetworkInfo();
+    const volume = await getVolumeInfo();
 
     return {
       cpu,
       gpu,
       ram,
       network,
+      volume,
       timestamp: Date.now()
     };
   } catch (error) {

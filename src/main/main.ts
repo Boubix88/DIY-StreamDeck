@@ -7,7 +7,7 @@ import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
 import { SerialPort } from 'serialport';
 
 import { getSystemInfo } from './ohmReader';
-
+import * as loudness from 'loudness';
 
 let mainWindow: BrowserWindow | null = null;
 let port: InstanceType<typeof SerialPort> | null = null;
@@ -81,10 +81,11 @@ function registerIpcHandler(channel: string, handler: (...args: any[]) => any) {
   ipcMain.handle(channel, handler);
 }
 
-// Handler unique pour toutes les infos système (CPU, GPU, RAM, Réseau)
+// Handler unique pour toutes les infos système (CPU, GPU, RAM, Réseau, Volume)
 registerIpcHandler('system:getAllSystemInfo', async () => {
   try {
-    const data = getSystemInfo();
+    const data = await getSystemInfo();
+    //console.log('Données système récupérées avec succès:', data);
     return data;
   } catch (error) {
     console.error('Erreur lors de la lecture des infos système OHM:', error);
@@ -149,21 +150,25 @@ registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath:
   try {
     // Fermer la connexion existante si elle existe
     if (port) {
-      if (parser) {
-        parser.removeAllListeners();
-        parser = null;
-      }
-
-      await new Promise<void>((resolve) => {
-        if (port) {
-          port.close(() => {
-            port = null;
-            resolve();
-          });
-        } else {
-          resolve();
+      try {
+        if (parser) {
+          parser.removeAllListeners();
+          parser = null;
         }
-      });
+        await new Promise<void>((resolve, reject) => {
+          port?.close((err: Error | null | undefined) => {
+            if (err) {
+              console.error('Erreur lors de la fermeture du port série (connect):', err);
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
+        });
+      } catch (closeErr) {
+        console.error('Erreur lors de la fermeture du port série (connect):', closeErr);
+      }
+      port = null;
     }
 
     // Créer une nouvelle instance du port série
@@ -227,13 +232,14 @@ registerIpcHandler('serial:disconnect', async () => {
   }
 
   try {
-    const currentPort = port;
-    port = null; // Réinitialiser la référence au port immédiatement
-
+    if (parser) {
+      parser.removeAllListeners();
+      parser = null;
+    }
     await new Promise<void>((resolve, reject) => {
-      currentPort.close((err: Error | null | undefined) => {
+      port?.close((err: Error | null | undefined) => {
         if (err) {
-          console.error('Error closing port:', err);
+          console.error('Erreur lors de la fermeture du port série (disconnect):', err);
           reject(err);
         } else {
           console.log('Successfully disconnected from port');
@@ -241,70 +247,37 @@ registerIpcHandler('serial:disconnect', async () => {
         }
       });
     });
-
+    port = null;
     return true;
   } catch (error) {
     console.error('Error in serial:disconnect handler:', error);
+    port = null;
     throw error;
   }
 });
 
 registerIpcHandler('serial:send', async (_, data: any) => {
-  console.log('Sending data to serial port:', data);
-
-  if (!port) {
-    const error = new Error('Not connected to any port');
-    console.error(error.message);
-    throw error;
-  }
-
-  const currentPort = port;
-  if (!currentPort) {
-    const error = new Error('Port instance is not available');
+  if (!port || !port.isOpen) {
+    const error = new Error('Not connected to any port or port is not open');
     console.error(error.message);
     throw error;
   }
 
   try {
-    // CORRECT : envoi binaire
-    const encodedData = encode(data); // encode() doit retourner un Buffer
-    console.log('CBOR buffer (hex):', encodedData.toString('hex')); // Pour le debug
-    currentPort.write(encodedData); // Envoi binaire
-    //const encodedData = encode(data);
-    // encodedData doit être un Buffer binaire (pas .toString(), pas .toString('hex'))
-    if (!Buffer.isBuffer(encodedData)) {
-      throw new Error('encodedData is not a Buffer!');
-    }
-    console.log('Writing CBOR buffer to port (length: %d):', encodedData.length);
-    // DEBUG : dump les premiers octets envoyés
-    console.log('CBOR sent [0-15]:', Array.from(encodedData.slice(0, 16)).map(v => v.toString(16).padStart(2, '0')).join(' '));
-
-    /*await new Promise<void>((resolve, reject) => {
-      console.log('typeof encodedData:', typeof encodedData);
-      console.log('isBuffer:', Buffer.isBuffer(encodedData));
-      console.log('first 16 bytes:', encodedData.slice(0, 16));
-
-      currentPort.write(encodedData, (err: Error | null | undefined) => {
+    // Envoyer directement la donnée JSON avec un saut de ligne
+    const jsonString = JSON.stringify(data) + '\n';
+    await new Promise<void>((resolve, reject) => {
+      port!.write(jsonString, 'utf8', (err) => {
         if (err) {
           console.error('Error writing to port:', err);
           reject(err);
-          return;
+        } else {
+          resolve();
         }
-
-        console.log('Data written, draining buffer...');
-        currentPort.drain((drainErr: Error | null | undefined) => {
-          if (drainErr) {
-            console.error('Error draining port:', drainErr);
-            reject(drainErr);
-          } else {
-            console.log('Data sent successfully');
-            resolve();
-          }
-        });
       });
-    });*/
-
-    return { success: true };
+    });
+    
+    return true;
   } catch (error) {
     console.error('Error in serial:send handler:', error);
     throw error;
@@ -314,12 +287,10 @@ registerIpcHandler('serial:send', async (_, data: any) => {
 // Gestion du volume système
 registerIpcHandler('system:getVolume', async () => {
   try {
-    // Implémentation basique - à adapter selon votre système d'exploitation
-    // Cette implémentation retourne une valeur par défaut pour le moment
-    return 50; // Valeur par défaut de 50%
+    return await loudness.getVolume();
   } catch (error) {
     console.error('Error getting system volume:', error);
-    throw error;
+    return 0;
   }
 });
 

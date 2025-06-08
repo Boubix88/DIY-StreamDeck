@@ -12,12 +12,13 @@ const SerialMonitor: React.FC<SerialMonitorProps> = ({
   onClear,
   maxHeight = '300px',
 }) => {
-  const logsEndRef = React.useRef<HTMLDivElement>(null);
+  // Ref sur le container scrollable, pas juste sur la fin
+  const logsContainerRef = React.useRef<HTMLDivElement>(null);
 
-  // Faire défiler vers le bas à chaque nouveau log
+  // Scroll auto du panneau (sans impacter la page)
   React.useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
     }
   }, [logs]);
 
@@ -40,6 +41,7 @@ const SerialMonitor: React.FC<SerialMonitorProps> = ({
       </div>
       
       <div 
+        ref={logsContainerRef}
         className="flex-1 overflow-y-auto bg-gray-900 p-3 rounded font-mono text-sm text-green-400"
         style={{ 
           whiteSpace: 'pre-wrap',
@@ -56,7 +58,6 @@ const SerialMonitor: React.FC<SerialMonitorProps> = ({
             <div key={index} className="whitespace-pre-wrap">{log}</div>
           ))
         )}
-        <div ref={logsEndRef} />
       </div>
       
       <div className="mt-2 flex justify-end">

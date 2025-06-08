@@ -91,10 +91,11 @@ function getNetworkInfo() {
 
 export function getSystemInfo() {
   const ohm = readOhmBridge();
+  
   return {
     cpu: ohm.cpu ?? null,
     gpu: ohm.gpu ?? null,
     ram: ohm.ram ?? null,
-    network: ohm.network ?? null,
+    network: ohm.network ?? null
   };
 }

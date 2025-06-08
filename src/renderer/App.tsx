@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Cpu, HardDrive, Wifi, Volume2 } from 'react-feather';
 import CpuInfoCard from './components/CpuInfoCard';
 import GpuInfoCard from './components/GpuInfoCard';
 import RamInfoCard from './components/RamInfoCard';
@@ -15,20 +16,82 @@ import useSystemInfo from './hooks/useSystemInfo';
 
 interface ScreenData {
   s: {
-    title: string;
-    items: Array<{
-      label: string;
-      value: string | number;
-      icon?: string;
-    }>;
+    t: Array<Array<any>>;
+    v: Array<any>;
+    c: number[];
   };
-  c?: number[];  // Optional RGB data
+}
+
+enum screens {
+  CPU = 0,
+  GPU = 1,
+  RAM = 2,
+  NET = 3,
+  VOLUME = 4
 }
 
 const App: React.FC = () => {
-  const [timeInterval, setTimeInterval] = useState<number>(5000);
-  const [activeScreen, setActiveScreen] = useState<number>(0);
-  const { cpuInfo, cpuTemperature, gpuInfo, ramInfo, networkInfo } = useSystemInfo(timeInterval * 50);
+  const [timeInterval, setTimeInterval] = useState<number>(5000); // Mise à jour toutes les 5 secondes
+  const [activeScreen, setActiveScreen] = useState<number>(screens.CPU);
+  const { cpuInfo, cpuTemperature, gpuInfo, ramInfo, networkInfo } = useSystemInfo(timeInterval);
+  const [lastScreen, setLastScreen] = useState<number>(screens.CPU);
+  const [volumeInfo, setVolumeInfo] = useState<number | null>(null);
+  // Référence pour suivre le timer de retour à l'écran précédent
+  const returnTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Mise à jour du volume séparément
+  useEffect(() => {
+    let isMounted = true;
+    
+    const updateVolume = async () => {
+      try {
+        const volume = await window.electronAPI.invoke('system:getVolume');
+        if (isMounted) {
+          setVolumeInfo(prevVolume => {
+            // Si le volume a changé, on déclenche l'affichage du volume
+            if (prevVolume !== volume) {
+              // Annuler le timer précédent s'il existe
+              if (returnTimerRef.current) {
+                clearTimeout(returnTimerRef.current);
+              }
+              
+              // Si on n'est pas déjà sur l'écran volume, sauvegarder l'écran actuel
+              if (activeScreen !== screens.VOLUME) {
+                setLastScreen(activeScreen);
+              }
+              
+              // Basculer sur l'écran volume
+              setActiveScreen(screens.VOLUME);
+              
+              // Planifier le retour à l'écran précédent dans 5 secondes
+              returnTimerRef.current = setTimeout(() => {
+                if (activeScreen === screens.VOLUME) {  // Ne revenir que si on est toujours sur l'écran volume
+                  setActiveScreen(prevScreen => prevScreen === screens.VOLUME ? lastScreen : prevScreen);
+                }
+              }, 5000);
+            }
+            return volume;
+          });
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération du volume:', error);
+      }
+    };
+    
+    // Première mise à jour
+    updateVolume();
+    
+    // Mise à jour périodique (toutes les 100ms pour une meilleure réactivité)
+    const volumeInterval = setInterval(updateVolume, 100);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(volumeInterval);
+      if (returnTimerRef.current) {
+        clearTimeout(returnTimerRef.current);
+      }
+    };
+  }, [activeScreen, lastScreen]);
 
   // Assignations locales (à relier à la persistance plus tard)
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -71,9 +134,10 @@ const App: React.FC = () => {
         c: "0000FF"
       },
       v: [
-        ["M161 86H85V161H161ZM188 132H164V140H188V154H164V166H152V191H137V166H131V191H115V166H108V191H95V166H82V154H58V140H82V132H58V118H82V109H58V96H82V84H95V60H108V84H115V60H131V84H137V60H152V84H164V96H188V109H164V118H188V132", "0000FF"] // Ex: triangle décoratif
+        ["M161 86H85V161H161ZM188 132H164V140H188V154H164V166H152V191H137V166H131V191H115V166H108V191H95V166H82V154H58V140H82V132H58V118H82V109H58V96H82V84H95V60H108V84H115V60H131V84H137V60H152V84H164V96H188V109H164V118H188V132", "0000FF"]
       ]
     };
+
     // --- GPU ---
     const gpuScreen = {
       t: {
@@ -85,9 +149,13 @@ const App: React.FC = () => {
         c: "00BFFF"
       },
       v: [
-        ["M 50 50 L 180 50 L 115 180 Z", "FFA500"]
+        [
+          "M151 155V161H111V155H151ZM91 155H103V161H91V155ZM66 110V137H60V110H66ZM67 94H183V111L178 115V150L172 153H67V94M66 100H59V101H66V109H59V138H66V146H59V148H66V161H67V155H88V162H104V155H110V162H153V155H172L179 151V116L184 111V91H67V85H51V87H66V100Z",
+          "FF0000"
+        ]
       ]
     };
+
     // --- RAM ---
     const ramScreen = {
       t: {
@@ -101,6 +169,7 @@ const App: React.FC = () => {
         ["M 30 30 L 210 30 L 210 210 L 30 210 Z", "00FF00"]
       ]
     };
+    
     // --- Réseau ---
     const netScreen = {
       t: {
@@ -115,14 +184,68 @@ const App: React.FC = () => {
         ["M 50 50 L 180 50 L 180 180 L 50 180 Z", "888888"]
       ]
     };
+
+    // --- Volume ---
+    const center_x = 120, center_y = 120, radius_outer = 120, radius_inner = 105, total_bars = 13;
+    const path_commands_active: string[] = [];
+    const path_commands_inactive: string[] = [];
+    const active_bars = Math.max(0, Math.min(total_bars, Number((volumeInfo || 0) * total_bars / 100)));
+
+    for (let i = 0; i < total_bars; i++) {
+        // Angle pour chaque barre
+      const angle = (2 * Math.PI / total_bars) * i + Math.PI / 2;
+
+        // Calcul des points en coordonnées polaires -> cartésiennes
+      const x_outer = Math.round(center_x + radius_outer * Math.cos(angle));
+      const y_outer = Math.round(center_y + radius_outer * Math.sin(angle));
+      const x_inner = Math.round(center_x + radius_inner * Math.cos(angle));
+      const y_inner = Math.round(center_y + radius_inner * Math.sin(angle));
+
+        // Ajouter les barres actives uniquement
+      if (i < active_bars) {
+        path_commands_active.push(`M ${x_inner} ${y_inner} L ${x_outer} ${y_outer}`);
+      } else {
+        path_commands_inactive.push(`M ${x_inner} ${y_inner} L ${x_outer} ${y_outer}`);
+        //path_commands_inactive.append(f"M {x_inner} {y_inner} L {x_inner} {y_outer}") // Points
+      }
+    }
+
+    const volumeScreen = {
+      t: {
+        t: [
+          [
+            120 - (String(volumeInfo || '0').length * (6 * 7)) / 2,
+            150,
+            7,
+            String(volumeInfo || '0')
+          ]
+        ],
+        c: "FFFFFF",
+      },
+      v: [
+        [
+          "M145 35 L147 35 L150 39 V132L148 133 L146 134 L134 130 L118 116 L108 103V69L116 56 L129 42Z M83 64 H102 V108 H83V64",
+          "FFFFFF"
+        ],
+        [
+          ' '.concat(path_commands_inactive.join(' ')) + 'Z',
+          "808080"
+        ],
+        [
+          ' '.concat(path_commands_active.join(' ')) + 'Z',
+          "0000FF"
+        ]
+      ]
+    };
+
     // --- Mapping écran actif ---
-    const screens = [cpuScreen, gpuScreen, ramScreen, netScreen];
+    const screens = [cpuScreen, gpuScreen, ramScreen, netScreen, volumeScreen];
     // --- RGB/Mode/Brightness/Speed ---
     // Format: [mode, r, g, b, brightness, speed]
     const colorData = [mode + 1, color.r, color.g, color.b, speed];
     // --- Clear flag (ex: reset écran) ---
-    const clear = false; // À relier à un bouton plus tard
-    // --- Payload complet ---
+    const clear = false;
+    
     return {
       s: screens[activeScreen] || cpuScreen,
       c: colorData,
@@ -141,7 +264,7 @@ const App: React.FC = () => {
       window.electronAPI.invoke('serial:send', payload);
       // Pour debug :
       // console.log('Payload envoyé à l\'Arduino :', payload);
-    }, 1000); // toutes les 1 seconde
+    }, 50); // toutes les 50ms
   
     return () => clearInterval(interval);
   }, [connectedPort, cpuInfo, gpuInfo, ramInfo, networkInfo, mode, color, speed, activeScreen]);
@@ -209,7 +332,17 @@ const App: React.FC = () => {
   }, []);
 
   // Ce payload sera envoyé à l'Arduino (CBOR côté main)
-  const arduinoPayload = useMemo(() => buildArduinoPayload(), [cpuInfo, gpuInfo, ramInfo, networkInfo, mode, color, speed, activeScreen]);
+  const arduinoPayload = useMemo(() => {
+    const payload = buildArduinoPayload();
+    // Si l'écran actif est différent du dernier écran, on ajoute l'indicateur de nettoyage
+    if (activeScreen !== lastScreen) {
+      payload.clr = true;
+      setLastScreen(activeScreen);
+    } else {
+      payload.clr = false;
+    }
+    return payload;
+  }, [cpuInfo, gpuInfo, ramInfo, networkInfo, volumeInfo, mode, color, speed, activeScreen, lastScreen]);
 
   // Pour la preview, on passe uniquement le screenData de l'écran actif
   const previewData = [arduinoPayload.s];

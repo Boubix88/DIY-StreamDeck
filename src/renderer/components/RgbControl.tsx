@@ -50,7 +50,7 @@ const RgbControl: React.FC<RgbControlProps> = ({ mode, color, speed, onModeChang
         <input
           type="range"
           min="1"
-          max="50"
+          max="100"
           value={speed}
           onChange={e => onSpeedChange(Number(e.target.value))}
           className="w-full"

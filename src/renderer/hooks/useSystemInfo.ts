@@ -66,19 +66,25 @@ const useSystemInfo = (timeInterval: number): UseSystemInfoReturn => {
   // Mettre à jour les informations périodiquement
   useEffect(() => {
     // Première récupération
-    if (isFirstRender.current) {
-      updateAllInfo();
-      isFirstRender.current = false;
-    }
+    const update = async () => {
+      if (isFirstRender.current) {
+        await updateAllInfo();
+        isFirstRender.current = false;
+      }
+    };
+    
+    update(); // Appel initial
 
-    // Mettre à jour toutes les 2 secondes
-    const interval = setInterval(updateAllInfo, 100);
+    // Mettre à jour à l'intervalle spécifié (en millisecondes)
+    //console.log(`Démarrage de la mise à jour des infos système avec un intervalle de ${timeInterval}ms`);
+    const interval = setInterval(updateAllInfo, timeInterval);
 
     // Nettoyer l'intervalle lors du démontage du composant
     return () => {
+      //console.log('Nettoyage de l\'intervalle de mise à jour système');
       clearInterval(interval);
     };
-  }, [updateAllInfo]);
+  }, [updateAllInfo, timeInterval]); // Ajout de timeInterval dans les dépendances
 
   return {
     // États principaux
