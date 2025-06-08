@@ -1,5 +1,29 @@
-import * as si from 'systeminformation';
-import loudness from 'loudness';
+import si from 'systeminformation';
+import * as loudness from 'loudness';
+import osu from 'node-os-utils';
+import os from 'os';
+
+// --- Cache pour les infos "lentes" (température, GPU) ---
+let lastAdvancedInfo: any = null;
+let lastAdvancedInfoTimestamp = 0;
+const ADVANCED_REFRESH_MS = 5000;
+
+/*async function refreshAdvancedInfo() {
+  try {
+    // Température CPU et GPU
+    const [cpuTemp, graphics] = await Promise.all([
+      si.cpuTemperature(),
+      si.graphics()
+    ]);
+    lastAdvancedInfo = {
+      cpuTemperature: cpuTemp.main,
+      gpu: graphics.controllers[0] || {},
+    };
+    lastAdvancedInfoTimestamp = Date.now();
+  } catch {}
+}
+setInterval(refreshAdvancedInfo, ADVANCED_REFRESH_MS);
+refreshAdvancedInfo(); // Premier appel immédiat*/
 
 export interface CpuInfo {
   // Propriétés de base
@@ -156,76 +180,95 @@ export interface NetworkInfo {
   speed?: number;           // en Mbps
 }
 
-export const getCpuInfo = async (): Promise<CpuInfo> => {
+// --- Infos CPU/RAM/Réseau ultra-rapides ---
+export const getAllSystemInfo = async () => {
+  // CPU usage (instantané, rapide)
+  let cpuUsage = 0;
   try {
-    const [cpu, currentLoad, cpuTemp, cpuSpeed] = await Promise.all([
-      si.cpu(),
-      si.currentLoad(),
-      si.cpuTemperature(),
-      si.cpuCurrentSpeed()
-    ]);
-
-    // Récupérer les informations du cache si disponibles
-    const cacheInfo = await si.cpuCache().catch(() => ({
-      l1d: 0,
-      l1i: 0,
-      l2: 0,
-      l3: 0
-    }));
-
-    // Définir la température (en °C)
-    const temperature = cpuTemp.main || 0;
-    
-    // Définir la fréquence (en GHz)
-    const frequency = (cpu.speed || 0) / 1000;
-    
-    // Définir l'utilisation (en %)
-    const usage = currentLoad.currentLoad || 0;
-    
-    return {
-      // Propriétés requises par l'interface CpuInfo
-      temperature,
-      usage,
-      frequency,
-      processes: cpu.processors || 1,
-      cores: cpu.cores,
-      physicalCores: cpu.physicalCores,
-      manufacturer: cpu.manufacturer || '',
-      brand: cpu.brand || '',
-      
-      // Propriétés optionnelles
-      vendor: cpu.vendor || '',
-      family: cpu.family || '',
-      model: cpu.model || '',
-      speed: frequency,
-      speedMin: (cpu.speedMin || 0) / 1000,
-      speedMax: (cpu.speedMax || 0) / 1000,
-      governor: (cpu as any).governor || '',
-      currentLoad: usage,
-      currentLoadUser: currentLoad.currentLoadUser || 0,
-      currentLoadSystem: currentLoad.currentLoadSystem || 0,
-      currentLoadNice: currentLoad.currentLoadNice || 0,
-      currentLoadIdle: currentLoad.currentLoadIdle || 0,
-      rawCurrentLoad: currentLoad.rawCurrentLoad || 0,
-      rawCurrentLoadUser: currentLoad.rawCurrentLoadUser || 0,
-      rawCurrentLoadSystem: currentLoad.rawCurrentLoadSystem || 0,
-      rawCurrentLoadNice: currentLoad.rawCurrentLoadNice || 0,
-      rawCurrentLoadIdle: currentLoad.rawCurrentLoadIdle || 0,
-      temperatureMax: cpuTemp.max || 0,
-      cache: {
-        l1d: Math.round((cacheInfo.l1d || 0) / 1024), // Convertir en Ko
-        l1i: Math.round((cacheInfo.l1i || 0) / 1024), // Convertir en Ko
-        l2: Math.round((cacheInfo.l2 || 0) / 1024),   // Convertir en Ko
-        l3: Math.round((cacheInfo.l3 || 0) / 1024)    // Convertir en Ko
-      }
-    };
-  } catch (error) {
-    console.error('Error getting CPU info:', error);
-    throw error;
+    cpuUsage = await (osu as any).cpu.usage(); // %
+  } catch (e) {
+    // osu absent ou erreur, fallback 0
   }
+  /*const cpuInfo = os.cpus()[0];
+  const cpuBrand = cpuInfo.model;
+  const cpuCores = os.cpus().length;
+  const cpuFrequency = cpuInfo.speed * 1000; // MHz -> Hz*/
+  
+  // CPU
+  const valueObject = {
+    cpuCurrentSpeed: 'avg',
+    cpuTemperature: 'main',
+  }
+  let cpuFrequency = 0;
+  let cpuTemp = 0;
+  
+  await si.get(valueObject).then(data => {
+    cpuFrequency = data.cpuCurrentSpeed?.avg || 0;
+    cpuTemp = data.cpuTemperature?.main || 0;
+  });
+
+  // RAM
+  const totalMem = os.totalmem() / (1024 * 1024 * 1024); // Go
+  const freeMem = os.freemem() / (1024 * 1024 * 1024);   // Go
+  const usedMem = totalMem - freeMem;
+
+  // Réseau (débits non instantanés, mais IP rapide)
+  const networkInterfaces = os.networkInterfaces();
+  let ip = '';
+  for (const iface of Object.values(networkInterfaces)) {
+    if (iface) {
+      const found = iface.find(i => i.family === 'IPv4' && !i.internal);
+      if (found) { ip = found.address; break; }
+    }
+  }
+
+  // Température CPU et GPU, VRAM, fréquence (depuis le cache avancé)
+  let cpuTemperature = null, gpu: any = {}, gpuTemp = null, vramUsed = null, vramTotal = null, gpuFreq = null;
+  if (lastAdvancedInfo && lastAdvancedInfo.gpu) {
+    cpuTemperature = lastAdvancedInfo.cpuTemperature;
+    gpu = lastAdvancedInfo.gpu;
+    gpuTemp = gpu.temperatureGpu ?? null;
+    vramUsed = gpu.memoryUsed ?? null;
+    vramTotal = gpu.memoryTotal ?? null;
+    gpuFreq = gpu.clockCore ?? null;
+  }
+
+  // Volume (léger)
+  let volume = null;
+  try { volume = await loudness.getVolume(); } catch {}
+
+  return {
+    cpuInfo: {
+      brand: "",
+      usage: cpuUsage,
+      frequency: cpuFrequency,
+      cores: os.cpus().length,
+      processCount: os.loadavg()[0], // approximation
+    },
+    cpuTemperature: { main: cpuTemp },
+    gpuInfo: {
+      model: gpu.model ?? null,
+      usage: gpu.utilizationGpu ?? null,
+      temperature: gpuTemp,
+      frequency: gpuFreq,
+      vramUsed,
+      vramTotal,
+    },
+    ramInfo: {
+      total: totalMem,
+      used: usedMem,
+    },
+    networkInfo: {
+      ip,
+      rxRate: null, // indisponible en natif rapide
+      txRate: null,
+    },
+    volume,
+    timestamp: Date.now()
+  };
 };
 
-export const getGpuInfo = async (): Promise<GpuInfo> => {
+/*export const getGpuInfo = async (): Promise<GpuInfo> => {
   try {
     const graphics = await si.graphics();
     const defaultController = {
@@ -336,9 +379,9 @@ export const getGpuInfo = async (): Promise<GpuInfo> => {
     console.error('Error getting GPU info:', error);
     throw error;
   }
-};
+};*/
 
-export const getRamInfo = async (): Promise<RamInfo> => {
+/*export const getRamInfo = async (): Promise<RamInfo> => {
   try {
     const mem = await si.mem();
     const memLayout = await si.memLayout();
@@ -385,9 +428,9 @@ export const getRamInfo = async (): Promise<RamInfo> => {
     console.error('Error getting RAM info:', error);
     throw error;
   }
-};
+};*/
 
-export const getNetworkInfo = async (): Promise<NetworkInfo> => {
+/*export const getNetworkInfo = async (): Promise<NetworkInfo> => {
   try {
     const [networkStats, networkInterfaces, networkConnections, defaultInterface] = await Promise.all([
       si.networkStats(),
@@ -444,7 +487,7 @@ export const getNetworkInfo = async (): Promise<NetworkInfo> => {
     console.error('Error getting network info:', error);
     throw error;
   }
-};
+};*/
 
 // Fonction pour obtenir le volume système
 async function getVolumeInfo(): Promise<number> {
@@ -463,32 +506,3 @@ async function getVolumeInfo(): Promise<number> {
   }
 }
 
-export const getAllSystemInfo = async () => {
-  try {
-    /*const [cpu, gpu, ram, network, volume] = await Promise.all([
-      getCpuInfo(),
-      getGpuInfo(),
-      getRamInfo(),
-      getNetworkInfo(),
-      getVolumeInfo()
-    ]);*/
-
-    const cpu = await getCpuInfo();
-    const gpu = await getGpuInfo();
-    const ram = await getRamInfo();
-    const network = await getNetworkInfo();
-    const volume = await getVolumeInfo();
-
-    return {
-      cpu,
-      gpu,
-      ram,
-      network,
-      volume,
-      timestamp: Date.now()
-    };
-  } catch (error) {
-    console.error('Error getting all system info:', error);
-    throw error;
-  }
-};

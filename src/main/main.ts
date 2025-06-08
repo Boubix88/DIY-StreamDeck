@@ -6,8 +6,10 @@ import { encode } from 'cbor-x';
 import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from 'electron';
 import { SerialPort } from 'serialport';
 
-import { getSystemInfo } from './ohmReader';
+//import { getSystemInfo } from './ohmReader';
 import * as loudness from 'loudness';
+import { getAllSystemInfo } from './systemInfo';
+import { getSystemInfo } from './ohmReader';
 
 let mainWindow: BrowserWindow | null = null;
 let port: InstanceType<typeof SerialPort> | null = null;
@@ -81,15 +83,32 @@ function registerIpcHandler(channel: string, handler: (...args: any[]) => any) {
   ipcMain.handle(channel, handler);
 }
 
+// Cache des données système pour éviter les appels trop fréquents
+let lastSystemInfo: any = null;
+let lastSystemInfoTime = 0;
+const SYSTEM_INFO_CACHE_VALIDITY = 500; // 500ms de validité du cache
+
 // Handler unique pour toutes les infos système (CPU, GPU, RAM, Réseau, Volume)
 registerIpcHandler('system:getAllSystemInfo', async () => {
   try {
+    const now = Date.now();
+    
+    // Si on a des données récentes en cache, on les retourne immédiatement
+    if (lastSystemInfo && now - lastSystemInfoTime < SYSTEM_INFO_CACHE_VALIDITY) {
+      return lastSystemInfo;
+    }
+    
+    // Sinon, on récupère de nouvelles données (déjà optimisées avec cache interne)
     const data = await getSystemInfo();
-    //console.log('Données système récupérées avec succès:', data);
+    
+    // On met à jour le cache
+    lastSystemInfo = data;
+    lastSystemInfoTime = now;
+    
     return data;
-  } catch (error) {
-    console.error('Erreur lors de la lecture des infos système OHM:', error);
-    throw error;
+  } catch (e) {
+    console.error('Erreur lors de la lecture des infos système OHM:', e);
+    return lastSystemInfo || { cpu: null, gpu: null, ram: null, network: null };
   }
 });
 

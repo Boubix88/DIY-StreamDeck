@@ -1,10 +1,7 @@
-// Utilitaire pour lire et parser le JSON d'OpenHardwareMonitor
-// Nécessite qu'OpenHardwareMonitor exporte régulièrement vers un fichier (ex: C:/temp/ohm.json)
-import fs from 'fs';
+// Utilitaire pour lire et parser le JSON d'OpenHardwareMonitor avec cache et rafraîchissement en arrière-plan
+import { spawn, execSync } from 'child_process';
 import os from 'os';
-import { execSync } from 'child_process';
-
-const OHM_PATH = 'C:/temp/ohm.json'; // À adapter si besoin
+import path from 'path';
 
 type OhmSensor = {
   SensorType: string;
@@ -19,83 +16,97 @@ type OhmJson = {
   Hardware: OhmHardware[];
 };
 
-function readOhmBridge(): any {
-  try {
-    const path = require('path');
-    const exePath = path.join(__dirname, '../../OHMBridge/bin/Release/net48/OHMBridge.exe');
-    const output = execSync(`"${exePath}"`, { encoding: 'utf8' });
-    return JSON.parse(output);
-  } catch (e) {
-    console.error('Erreur exécution OHMBridge.exe:', e);
-    return { cpu: null, gpu: null, ram: null, network: null };
-  }
-}
+// Cache des données système
+let lastSystemData: any = { cpu: null, gpu: null, ram: null, network: null };
+let lastUpdateTime = 0;
+const CACHE_VALIDITY = 2000; // 2 secondes de validité du cache
 
-function findSensor(hardware: OhmHardware | undefined, type: string, nameLike: string): OhmSensor | undefined {
-  if (!hardware) return undefined;
-  return hardware.Sensors.find((s: OhmSensor) => s.SensorType === type && s.Name.toLowerCase().includes(nameLike.toLowerCase()));
-}
-
-function getCpuInfo(ohm: OhmJson) {
-  const cpu = ohm.Hardware.find((h) => h.HardwareType === 'CPU');
-  const temp = findSensor(cpu, 'Temperature', 'package')?.Value ?? null;
-  const freq = findSensor(cpu, 'Clock', 'core #1')?.Value ?? null;
-  // Nombre de process via 'tasklist' (Windows)
-  let processCount = null;
-  try {
-    const output = execSync('tasklist').toString();
-    processCount = output.split('\n').filter(line => line.trim().length > 0).length - 3; // -3 header lines
-  } catch (e) {
-    processCount = null;
-  }
-  return { temperature: temp, frequency: freq, processCount };
-}
-
-function getGpuInfo(ohm: OhmJson) {
-  const gpu = ohm.Hardware.find((h) => h.HardwareType === 'GPU');
-  const temp = findSensor(gpu, 'Temperature', 'gpu core')?.Value ?? null;
-  const freq = findSensor(gpu, 'Clock', 'gpu core')?.Value ?? null;
-  const vramUsed = findSensor(gpu, 'Data', 'memory used')?.Value ?? null;
-  const vramTotal = findSensor(gpu, 'Data', 'memory total')?.Value ?? null;
-  return { temperature: temp, frequency: freq, vramUsed, vramTotal };
-}
-
-function getRamInfo(ohm: OhmJson) {
-  const ram = ohm.Hardware.find((h) => h.HardwareType === 'RAM');
-  const used = findSensor(ram, 'Data', 'memory used')?.Value ?? null;
-  const total = findSensor(ram, 'Data', 'memory total')?.Value ?? null;
-  // Fallback sur os.totalmem/os.freemem si OHM ne fournit pas
-  return {
-    used: used ?? (os.totalmem() - os.freemem()) / (1024 * 1024 * 1024),
-    total: total ?? os.totalmem() / (1024 * 1024 * 1024),
-  };
-}
-
-function getNetworkInfo() {
-  // Renvoie les octets cumulés par interface (à traiter côté front pour débit)
-  // Note : Node.js ne fournit pas directement les octets reçus/envoyés, il faut utiliser un module natif ou wmic/powershell pour du débit temps réel
-  // Ici, on retourne juste la liste des interfaces pour compatibilité future
-  const ifaces = os.networkInterfaces();
-  const stats: Record<string, { address: string }> = {};
-  for (const [name, arr] of Object.entries(ifaces)) {
-    if (!arr) continue;
-    for (const net of arr) {
-      if (net.family === 'IPv4' && !net.internal) {
-        stats[name] = { address: net.address };
-      }
+// Version non-bloquante avec spawn
+async function readOhmBridgeAsync(): Promise<any> {
+  return new Promise((resolve) => {
+    // Si le cache est récent, on le retourne immédiatement
+    const now = Date.now();
+    if (now - lastUpdateTime < CACHE_VALIDITY) {
+      return resolve(lastSystemData);
     }
-  }
-  return stats;
-  // Pour le débit, il faudrait utiliser un module comme 'node-os-utils' ou faire un wrapper PowerShell
+
+    const exePath = path.join(__dirname, '../../OHMBridge/bin/Release/net48/OHMBridge.exe');
+    
+    // Utilisation de spawn au lieu de execSync
+    const process = spawn(exePath, [], { windowsHide: true });
+    let output = '';
+    let errorOutput = '';
+    
+    // Collecte des données de sortie
+    process.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    process.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+    
+    // Timeout de sécurité (1 seconde max)
+    const timeout = setTimeout(() => {
+      process.kill();
+      console.warn('OHMBridge timeout - utilisation du cache');
+      resolve(lastSystemData);
+    }, 1000);
+    
+    // À la fin du processus
+    process.on('close', (code) => {
+      clearTimeout(timeout);
+      
+      if (code === 0 && output) {
+        try {
+          const data = JSON.parse(output);
+          lastSystemData = data;
+          lastUpdateTime = Date.now();
+          resolve(data);
+        } catch (e) {
+          console.error('Erreur parsing OHMBridge:', e);
+          resolve(lastSystemData);
+        }
+      } else {
+        console.error(`OHMBridge erreur (${code}):`, errorOutput);
+        resolve(lastSystemData);
+      }
+    });
+  });
 }
 
-export function getSystemInfo() {
-  const ohm = readOhmBridge();
-  
-  return {
-    cpu: ohm.cpu ?? null,
-    gpu: ohm.gpu ?? null,
-    ram: ohm.ram ?? null,
-    network: ohm.network ?? null
-  };
+// Fonction principale asynchrone pour récupérer toutes les infos système
+export async function getSystemInfo() {
+  try {
+    // Utiliser la version asynchrone non-bloquante
+    const ohm = await readOhmBridgeAsync();
+    
+    return {
+      cpu: ohm.cpu ?? null,
+      gpu: ohm.gpu ?? null,
+      ram: ohm.ram ?? null,
+      network: ohm.network ?? null
+    };
+  } catch (e) {
+    console.error('Erreur lors de la lecture des infos système OHM:', e);
+    return lastSystemData || { cpu: null, gpu: null, ram: null, network: null };
+  }
 }
+
+// Démarrer un rafraîchissement en arrière-plan
+let refreshInterval: NodeJS.Timeout;
+
+function startBackgroundRefresh(intervalMs = 3000) {
+  if (refreshInterval) clearInterval(refreshInterval);
+  
+  // Premier appel immédiat
+  readOhmBridgeAsync().catch(console.error);
+  
+  // Puis à intervalle régulier
+  refreshInterval = setInterval(() => {
+    readOhmBridgeAsync().catch(console.error);
+  }, intervalMs);
+}
+
+// Démarrer le rafraîchissement au chargement du module
+startBackgroundRefresh();

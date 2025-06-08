@@ -266,7 +266,7 @@ const App: React.FC = () => {
       // console.log('Payload envoyé à l\'Arduino :', payload);
     }, 50); // toutes les 50ms
   
-    return () => clearInterval(interval);
+    //return () => clearInterval(interval);
   }, [connectedPort, cpuInfo, gpuInfo, ramInfo, networkInfo, mode, color, speed, activeScreen]);
   
   // --- Gestion port série et terminal ---
