@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Cpu, HardDrive, Wifi, Volume2 } from 'react-feather';
+import { Cpu, HardDrive, Wifi, Volume2, RefreshCw, Zap, Clock, Monitor, Settings, Activity } from 'react-feather';
 import CpuInfoCard from './components/CpuInfoCard';
 import GpuInfoCard from './components/GpuInfoCard';
 import RamInfoCard from './components/RamInfoCard';
@@ -11,6 +11,102 @@ import PortSelector from './components/PortSelector';
 import SerialMonitor from './components/SerialMonitor';
 import SpotifyCard from './components/SpotifyCard';
 import useSystemInfo from './hooks/useSystemInfo';
+
+// Styles globaux pour les cartes
+const cardStyle = "rounded-xl overflow-hidden backdrop-blur-sm bg-opacity-20 shadow-lg border transition-all duration-300 hover:shadow-xl";
+const cardHeaderStyle = "flex items-center justify-between px-4 py-3 border-b";
+const cardContentStyle = "p-4";
+const glowEffect = "hover:shadow-[0_0_15px_rgba(56,189,248,0.5)]";
+const accentBorders = {
+  cpu: "border-cyan-500/50",
+  gpu: "border-purple-500/50",
+  ram: "border-blue-500/50",
+  network: "border-green-500/50",
+  spotify: "border-pink-500/50",
+  control: "border-amber-500/50",
+  grid: "border-indigo-500/30",
+  preview: "border-emerald-500/50",
+  monitor: "border-gray-500/30"
+};
+const accentGlows = {
+  cpu: "hover:shadow-[0_0_15px_rgba(6,182,212,0.5)]",
+  gpu: "hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]",
+  ram: "hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]",
+  network: "hover:shadow-[0_0_15px_rgba(34,197,94,0.5)]",
+  spotify: "hover:shadow-[0_0_15px_rgba(236,72,153,0.5)]",
+  control: "hover:shadow-[0_0_15px_rgba(245,158,11,0.5)]",
+  grid: "hover:shadow-[0_0_15px_rgba(99,102,241,0.3)]",
+  preview: "hover:shadow-[0_0_15px_rgba(16,185,129,0.5)]",
+  monitor: "hover:shadow-[0_0_15px_rgba(156,163,175,0.3)]"
+};
+const accentText = {
+  cpu: "text-cyan-400",
+  gpu: "text-purple-400",
+  ram: "text-blue-400",
+  network: "text-green-400",
+  spotify: "text-pink-400",
+  control: "text-amber-400",
+  grid: "text-indigo-400",
+  preview: "text-emerald-400",
+  monitor: "text-gray-400"
+};
+const accentBg = {
+  cpu: "bg-cyan-900/20",
+  gpu: "bg-purple-900/20",
+  ram: "bg-blue-900/20",
+  network: "bg-green-900/20",
+  spotify: "bg-pink-900/20",
+  control: "bg-amber-900/20",
+  grid: "bg-indigo-900/10",
+  preview: "bg-emerald-900/20",
+  monitor: "bg-gray-900/20"
+};
+
+// Types pour les composants UI
+interface ControlButtonProps {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}
+
+interface StatusBadgeProps {
+  connected: boolean;
+}
+
+interface SectionTitleProps {
+  icon: React.ReactNode;
+  title: string;
+  accentColor?: string;
+}
+
+// Composant pour les contrôles en haut
+const ControlButton: React.FC<ControlButtonProps> = ({ active, onClick, children, className = "" }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1.5 rounded-md flex items-center gap-2 transition-all ${active ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'} ${className}`}
+  >
+    {children}
+  </button>
+);
+
+// Badge pour les statuts
+const StatusBadge: React.FC<StatusBadgeProps> = ({ connected }) => (
+  <div className="flex items-center gap-1.5">
+    <div className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'} ${connected ? 'animate-pulse' : ''}`}></div>
+    <span className={`text-xs ${connected ? 'text-green-400' : 'text-red-400'}`}>
+      {connected ? 'Connecté' : 'Déconnecté'}
+    </span>
+  </div>
+);
+
+// Titre de section
+const SectionTitle: React.FC<SectionTitleProps> = ({ icon, title, accentColor = "text-indigo-400" }) => (
+  <div className={`flex items-center gap-2 mb-2 ${accentColor}`}>
+    {icon}
+    <h3 className="font-bold uppercase tracking-wider text-sm">{title}</h3>
+  </div>
+);
 
 // Dashboard principal "gamer"
 
@@ -38,6 +134,9 @@ const App: React.FC = () => {
   const [volumeInfo, setVolumeInfo] = useState<number | null>(null);
   // Référence pour suivre le timer de retour à l'écran précédent
   const returnTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Pour la preview, on passe uniquement le screenData de l'écran actif
+  const  [previewData, setPreviewData] = useState<any>();
   
   // Mise à jour du volume séparément
   useEffect(() => {
@@ -334,6 +433,9 @@ const App: React.FC = () => {
   // Ce payload sera envoyé à l'Arduino (CBOR côté main)
   const arduinoPayload = useMemo(() => {
     const payload = buildArduinoPayload();
+
+    setPreviewData(payload.s);
+
     // Si l'écran actif est différent du dernier écran, on ajoute l'indicateur de nettoyage
     if (activeScreen !== lastScreen) {
       payload.clr = true;
@@ -343,9 +445,6 @@ const App: React.FC = () => {
     }
     return payload;
   }, [cpuInfo, gpuInfo, ramInfo, networkInfo, volumeInfo, mode, color, speed, activeScreen, lastScreen]);
-
-  // Pour la preview, on passe uniquement le screenData de l'écran actif
-  const previewData = [arduinoPayload.s];
 
   // Envoi automatique du payload à l'Arduino (CBOR côté main)
   useEffect(() => {
@@ -377,120 +476,271 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#111827] flex flex-col items-center justify-center">
-      <div className="w-full flex flex-col items-center mb-6">
-        <h2 className="text-4xl md:text-5xl font-extrabold text-green-400 tracking-widest uppercase text-center"
-          style={{ textShadow: '0 0 32px #22d3ee, 0 0 8px #16f2b3' }}>
-          STREAMDECK
-        </h2>
-        <div className="flex flex-row flex-wrap justify-center items-center gap-6 mt-4 px-4">
-          {/* Connexion série */}
-          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-yellow-400">
-            <span className="text-yellow-300 font-bold mr-2">Port série :</span>
-            <select
-              className="bg-gray-700 text-white p-1 rounded"
-              value={connectedPort || ''}
-              onChange={e => {
-                const port = e.target.value;
-                if (port) handleConnect(port);
-                else handleDisconnect();
-              }}
-            >
-              <option value="">Sélectionner un port</option>
-              {ports.map(port => (
-                <option key={port.path} value={port.path}>
-                  {port.path} - {port.manufacturer || 'Inconnu'}
-                </option>
-              ))}
-            </select>
-            <div className={`w-4 h-4 rounded-full ml-2 ${connectedPort ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
-            <span className="text-xs text-gray-400 ml-1">{connectedPort ? 'Connecté' : 'Déconnecté'}</span>
+    <div className="bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#111827] min-h-screen flex flex-col">
+      {/* Header avec effet cyberpunk */}
+      <header className="w-full py-6 px-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 via-indigo-900/20 to-purple-900/20 z-0"></div>
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxkZWZzPjxwYXR0ZXJuIGlkPSJncmlkIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiPjxwYXRoIGQ9Ik0gMjAgMCBMIDAgMCAwIDIwIiBmaWxsPSJub25lIiBzdHJva2U9IiM4YmE0ZjkiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIiBvcGFjaXR5PSIwLjEiLz48L3N2Zz4=')] opacity-20 z-0"></div>
+        
+        <div className="relative z-10 max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            {/* Logo et titre */}
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="mr-4 bg-gradient-to-br from-cyan-500 to-blue-600 p-3 rounded-xl shadow-lg shadow-cyan-500/20">
+                <Zap size={28} className="text-white" />
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600"
+                style={{ textShadow: '0 0 30px rgba(56, 189, 248, 0.5)' }}>
+                STREAMDECK
+                <span className="text-xs align-top ml-1 font-mono bg-gradient-to-r from-purple-400 to-pink-600 text-transparent bg-clip-text">PRO</span>
+              </h1>
+            </div>
+            
+            {/* Contrôles principaux */}
+            <div className="flex flex-wrap gap-3 justify-center">
+              {/* Port série avec design amélioré */}
+              <div className={`${cardStyle} ${accentBorders.control} ${accentBg.control} ${accentGlows.control} px-4 py-2 flex items-center gap-2`}>
+                <Settings size={16} className={accentText.control} />
+                <span className={`${accentText.control} font-medium text-sm`}>Port:</span>
+                <select
+                  className="bg-gray-900/60 text-white text-sm py-1 px-2 rounded border border-gray-700 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 outline-none"
+                  value={connectedPort || ''}
+                  onChange={e => {
+                    const port = e.target.value;
+                    if (port) handleConnect(port);
+                    else handleDisconnect();
+                  }}
+                >
+                  <option value="">Sélectionner</option>
+                  {ports.map(port => (
+                    <option key={port.path} value={port.path}>
+                      {port.path.split('\\')?.[2] || port.path}
+                    </option>
+                  ))}
+                </select>
+                <StatusBadge connected={!!connectedPort} />
+              </div>
+              
+              {/* Rafraîchissement */}
+              <div className={`${cardStyle} ${accentBorders.network} ${accentBg.network} ${accentGlows.network} px-4 py-2 flex items-center gap-2`}>
+                <RefreshCw size={16} className={accentText.network} />
+                <span className={`${accentText.network} font-medium text-sm`}>Refresh:</span>
+                <select
+                  className="bg-gray-900/60 text-white text-sm py-1 px-2 rounded border border-gray-700 focus:ring-2 focus:ring-green-500/30 focus:border-green-500/50 outline-none"
+                  value={timeInterval}
+                  onChange={e => setTimeInterval(Number(e.target.value))}
+                >
+                  <option value={50}>50ms</option>
+                  <option value={100}>100ms</option>
+                  <option value={200}>200ms</option>
+                  <option value={500}>500ms</option>
+                  <option value={1000}>1s</option>
+                  <option value={2000}>2s</option>
+                  <option value={5000}>5s</option>
+                </select>
+              </div>
+              
+              {/* Écran Arduino */}
+              <div className={`${cardStyle} ${accentBorders.preview} ${accentBg.preview} ${accentGlows.preview} px-4 py-2 flex items-center gap-2`}>
+                <Monitor size={16} className={accentText.preview} />
+                <span className={`${accentText.preview} font-medium text-sm`}>Écran:</span>
+                <div className="flex items-center bg-gray-900/60 rounded border border-gray-700 overflow-hidden">
+                  <button
+                    className="px-2 py-1 text-white hover:bg-emerald-800/30 transition-colors"
+                    onClick={() => setActiveScreen(s => (s - 1 + 5) % 5)}
+                  >‹</button>
+                  <span className="px-3 font-bold text-white">{activeScreen + 1}</span>
+                  <button
+                    className="px-2 py-1 text-white hover:bg-emerald-800/30 transition-colors"
+                    onClick={() => setActiveScreen(s => (s + 1) % 5)}
+                  >›</button>
+                </div>
+              </div>
+            </div>
           </div>
-          {/* Sélecteur d'intervalle de rafraîchissement */}
-          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-blue-400">
-            <span className="text-blue-300 font-bold mr-2">Rafraîchissement :</span>
-            <select
-              className="bg-gray-700 text-white p-1 rounded"
-              value={timeInterval}
-              onChange={e => setTimeInterval(Number(e.target.value))}
-            >
-              <option value={50}>50ms</option>
-              <option value={100}>100ms</option>
-              <option value={200}>200ms</option>
-              <option value={500}>500ms</option>
-              <option value={1000}>1s</option>
-              <option value={2000}>2s</option>
-              <option value={5000}>5s</option>
-            </select>
+          
+          {/* Avertissement si intervalle trop court */}
+          {timeInterval < 1000 && (
+            <div className="mt-3 text-xs text-yellow-300 bg-yellow-900/30 border border-yellow-600/30 rounded-md px-3 py-1.5 flex items-center gap-2 max-w-md mx-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>Un intervalle &lt; 1s peut affecter les performances</span>
+            </div>
+          )}
+        </div>
+      </header>
+      {/* Dashboard principal avec grille responsive et design gamer */}
+      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-5">
+          {/* Section principale - Première rangée */}
+          <div className={`md:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5`}>
+            {/* KeyGrid - Grille de boutons */}
+            <div className={`md:col-span-3 ${cardStyle} ${accentBorders.grid} ${accentBg.grid} ${accentGlows.grid}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.grid}`}>
+                <SectionTitle 
+                  icon={<Activity size={18} className={accentText.grid} />}
+                  title="Contrôles StreamDeck"
+                  accentColor={accentText.grid}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <KeyGrid
+                  assignments={assignments}
+                  onAssign={handleAssign}
+                  onLaunch={handleLaunch}
+                  onDelete={handleDelete}
+                />
+              </div>
+            </div>
+            
+            {/* Contrôle RGB */}
+            <div className={`md:col-span-1 ${cardStyle} ${accentBorders.control} ${accentBg.control} ${accentGlows.control}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.control}`}>
+                <SectionTitle 
+                  icon={<Settings size={18} className={accentText.control} />}
+                  title="RGB LED"
+                  accentColor={accentText.control}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <RgbControl
+                  mode={mode}
+                  color={color}
+                  speed={speed}
+                  onModeChange={setMode}
+                  onColorChange={setColor}
+                  onSpeedChange={setSpeed}
+                />
+              </div>
+            </div>
+            
+            {/* Prévisualisation Arduino */}
+            <div className={`md:col-span-1 ${cardStyle} ${accentBorders.preview} ${accentBg.preview} ${accentGlows.preview}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.preview}`}>
+                <SectionTitle 
+                  icon={<Monitor size={18} className={accentText.preview} />}
+                  title="Écran"
+                  accentColor={accentText.preview}
+                />
+              </div>
+              <div className={`${cardContentStyle} flex justify-center items-center`}>
+                <ArduinoPreview previewData={previewData} activeScreen={activeScreen} />
+              </div>
+            </div>
+            
+            {/* Spotify */}
+            <div className={`md:col-span-3 ${cardStyle} ${accentBorders.spotify} ${accentBg.spotify} ${accentGlows.spotify}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.spotify}`}>
+                <SectionTitle 
+                  icon={
+                    <svg className={accentText.spotify} width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 3C7.03 3 3 7.03 3 12C3 16.97 7.03 21 12 21C16.97 21 21 16.97 21 12C21 7.03 16.97 3 12 3ZM16.19 16.19C16.04 16.34 15.84 16.42 15.64 16.42C15.44 16.42 15.24 16.34 15.09 16.19C14.79 15.89 14.79 15.41 15.09 15.11C16.38 13.82 16.38 11.71 15.09 10.42C14.79 10.12 14.79 9.64 15.09 9.34C15.39 9.04 15.87 9.04 16.17 9.34C17.96 11.13 17.96 14.4 16.19 16.19ZM14.76 14.76C14.61 14.91 14.41 14.99 14.21 14.99C14.01 14.99 13.81 14.91 13.66 14.76C13.36 14.46 13.36 13.98 13.66 13.68C14.25 13.09 14.25 12.15 13.66 11.56C13.36 11.26 13.36 10.78 13.66 10.48C13.96 10.18 14.44 10.18 14.74 10.48C15.83 11.57 15.83 13.67 14.76 14.76ZM11.45 12.89C10.36 12.89 9.47 12 9.47 10.91C9.47 9.82 10.36 8.93 11.45 8.93C12.54 8.93 13.43 9.82 13.43 10.91C13.43 12 12.54 12.89 11.45 12.89Z" fill="currentColor"/>
+                    </svg>
+                  }
+                  title="Spotify"
+                  accentColor={accentText.spotify}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <SpotifyCard track={spotifyTrack} />
+              </div>
+            </div>
           </div>
-          {/* Sélecteur écran actif */}
-          <div className="flex flex-row items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 shadow border border-purple-400">
-            <span className="text-purple-300 font-bold mr-2">Écran Arduino :</span>
-            <button
-              className="bg-purple-600 text-white px-2 py-1 rounded hover:bg-purple-500"
-              onClick={() => setActiveScreen(s => (s - 1 + 5) % 5)}
-            >⟨</button>
-            <span className="text-white font-bold text-lg">{activeScreen + 1}</span>
-            <button
-              className="bg-purple-600 text-white px-2 py-1 rounded hover:bg-purple-500"
-              onClick={() => setActiveScreen(s => (s + 1) % 5)}
-            >⟩</button>
+          
+          {/* Barre latérale - Infos système */}
+          <div className="md:col-span-2 grid grid-cols-1 gap-4 md:gap-5">
+            {/* CPU */}
+            <div className={`${cardStyle} ${accentBorders.cpu} ${accentBg.cpu} ${accentGlows.cpu}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.cpu}`}>
+                <SectionTitle 
+                  icon={<Cpu size={18} className={accentText.cpu} />}
+                  title="CPU"
+                  accentColor={accentText.cpu}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <CpuInfoCard cpuInfo={cpuInfo} cpuTemperature={cpuTemperature} />
+              </div>
+            </div>
+            
+            {/* GPU */}
+            <div className={`${cardStyle} ${accentBorders.gpu} ${accentBg.gpu} ${accentGlows.gpu}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.gpu}`}>
+                <SectionTitle 
+                  icon={<svg className={accentText.gpu} width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" strokeWidth="2" />
+                    <path d="M9 9.5H15V14.5H9V9.5Z" stroke="currentColor" strokeWidth="2" />
+                    <path d="M9 6V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M12 6V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M15 6V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M9 20V18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M12 20V18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M15 20V18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>}
+                  title="GPU"
+                  accentColor={accentText.gpu}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <GpuInfoCard gpuInfo={gpuInfo} />
+              </div>
+            </div>
+            
+            {/* RAM */}
+            <div className={`${cardStyle} ${accentBorders.ram} ${accentBg.ram} ${accentGlows.ram}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.ram}`}>
+                <SectionTitle 
+                  icon={<HardDrive size={18} className={accentText.ram} />}
+                  title="Mémoire"
+                  accentColor={accentText.ram}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <RamInfoCard ramInfo={ramInfo} />
+              </div>
+            </div>
+            
+            {/* Network */}
+            <div className={`${cardStyle} ${accentBorders.network} ${accentBg.network} ${accentGlows.network}`}>
+              <div className={`${cardHeaderStyle} ${accentBorders.network}`}>
+                <SectionTitle 
+                  icon={<Wifi size={18} className={accentText.network} />}
+                  title="Réseau"
+                  accentColor={accentText.network}
+                />
+              </div>
+              <div className={cardContentStyle}>
+                <NetworkInfoCard networkInfo={networkInfo} />
+              </div>
+            </div>
+          </div>
+          
+          {/* Terminal - Pleine largeur */}
+          <div className={`md:col-span-6 ${cardStyle} ${accentBorders.monitor} ${accentBg.monitor} ${accentGlows.monitor}`}>
+            <div className={`${cardHeaderStyle} ${accentBorders.monitor}`}>
+              <SectionTitle 
+                icon={<svg className={accentText.monitor} width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M7 8L10 11L7 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M12 16H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M4 6C4 4.89543 4.89543 4 6 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H6C4.89543 20 4 19.1046 4 18V6Z" stroke="currentColor" strokeWidth="2"/>
+                </svg>}
+                title="Terminal"
+                accentColor={accentText.monitor}
+              />
+              <button 
+                onClick={handleClearLogs}
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded transition-colors"
+              >
+                Effacer
+              </button>
+            </div>
+            <div className={cardContentStyle}>
+              <SerialMonitor logs={serialLogs} onClear={handleClearLogs} maxHeight="120px" />
+            </div>
           </div>
         </div>
-        {/* Avertissement si intervalle trop court */}
-        {timeInterval < 1000 && (
-          <div className="mt-2 text-xs text-yellow-400 bg-yellow-900 rounded px-2 py-1 animate-pulse">
-            Attention : Un intervalle &lt; 1s peut ralentir linterface !
-          </div>
-        )}
-      </div>
-      {/* Nouveau layout grid 6 colonnes, inspiré de l'exemple */}
-      <div className="w-full px-8 grid grid-cols-5 gap-8">
-        {/* RGB à gauche */}
-        <div className="col-span-1 row-span-1 aspect-[1/1]">
-          <RgbControl
-            mode={mode}
-            color={color}
-            speed={speed}
-            onModeChange={setMode}
-            onColorChange={setColor}
-            onSpeedChange={setSpeed}
-          />
-        </div>
-        {/* KeyGrid centré, large */}
-        <div className="col-span-2 row-span-1 aspect-[2/1]">
-          <KeyGrid
-            assignments={assignments}
-            onAssign={handleAssign}
-            onLaunch={handleLaunch}
-            onDelete={handleDelete}
-          />
-        </div>
-        {/* ArduinoPreview + Spotify à droite */}
-        <div className="col-span-1 row-span-1 aspect-[1/1]">
-          <ArduinoPreview previewData={previewData} activeScreen={activeScreen} />
-        </div>
-        <div className="col-span-2 row-span-1 aspect-[2/1]">
-          <SpotifyCard track={spotifyTrack} />
-        </div>
-        <div className="col-span-1 row-span-2 aspect-[1/2]">
-          <NetworkInfoCard networkInfo={networkInfo} />
-        </div>
-        {/* SerialMonitor pleine largeur */}
-        <div className="col-span-2 row-span-1 aspect-[2/1]">
-          <SerialMonitor logs={serialLogs} onClear={handleClearLogs} maxHeight="120px" />
-        </div>
-        {/* System Info Cards (CPU, GPU, RAM, Network) en ligne, pleine largeur */}
-        <div className="col-span-1 row-span-1 aspect-[1/1]">
-          <CpuInfoCard cpuInfo={cpuInfo} cpuTemperature={cpuTemperature} />
-        </div>
-        <div className="col-span-1 row-span-1 aspect-[1/1]">
-          <GpuInfoCard gpuInfo={gpuInfo} />
-        </div>
-        <div className="col-span-1 row-span-1 aspect-[1/1]">
-          <RamInfoCard ramInfo={ramInfo} />
-        </div>
-      </div>
+      </main>
       <footer className="mt-8 mb-4 text-gray-500 text-xs opacity-60 text-center w-full">
         DIY StreamDeck &copy; {new Date().getFullYear()} | Dashboard Gamer UI
       </footer>

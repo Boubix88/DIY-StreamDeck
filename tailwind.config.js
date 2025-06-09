@@ -82,11 +82,21 @@ module.exports = {
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'scan': 'scan 3s linear infinite',
+        'scan-reverse': 'scan-reverse 4s linear infinite',
       },
       keyframes: {
         pulse: {
           '0%, 100%': { opacity: 1 },
           '50%': { opacity: 0.5 },
+        },
+        scan: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(200%)' },
+        },
+        'scan-reverse': {
+          '0%': { transform: 'translateX(200%)' },
+          '100%': { transform: 'translateX(-100%)' },
         },
       },
     },

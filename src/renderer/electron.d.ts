@@ -18,8 +18,9 @@ declare global {
         vendorId?: string;
       }>>;
       
-      // Événements pour les logs série
+      // Événements pour la communication série
       onSerialData: (callback: (data: string) => void) => () => void;
+      onSerialError: (callback: (error: { type: string; message: string; port?: string }) => void) => () => void;
       
       connectToPort: (portPath: string) => Promise<boolean>;
       disconnectFromPort: () => Promise<boolean>;

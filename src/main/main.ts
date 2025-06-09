@@ -83,10 +83,13 @@ function registerIpcHandler(channel: string, handler: (...args: any[]) => any) {
   ipcMain.handle(channel, handler);
 }
 
+// Configuration du rafraîchissement système
+let systemRefreshInterval = 1000; // Intervalle par défaut (1 seconde)
+let systemInfoCacheValidity = 500; // Validité du cache par défaut (500ms)
+
 // Cache des données système pour éviter les appels trop fréquents
 let lastSystemInfo: any = null;
 let lastSystemInfoTime = 0;
-const SYSTEM_INFO_CACHE_VALIDITY = 500; // 500ms de validité du cache
 
 // Handler unique pour toutes les infos système (CPU, GPU, RAM, Réseau, Volume)
 registerIpcHandler('system:getAllSystemInfo', async () => {
@@ -94,7 +97,7 @@ registerIpcHandler('system:getAllSystemInfo', async () => {
     const now = Date.now();
     
     // Si on a des données récentes en cache, on les retourne immédiatement
-    if (lastSystemInfo && now - lastSystemInfoTime < SYSTEM_INFO_CACHE_VALIDITY) {
+    if (lastSystemInfo && now - lastSystemInfoTime < systemInfoCacheValidity) {
       return lastSystemInfo;
     }
     
@@ -110,6 +113,30 @@ registerIpcHandler('system:getAllSystemInfo', async () => {
     console.error('Erreur lors de la lecture des infos système OHM:', e);
     return lastSystemInfo || { cpu: null, gpu: null, ram: null, network: null };
   }
+});
+
+// Handler pour configurer l'intervalle de rafraîchissement système depuis le frontend
+registerIpcHandler('system:setRefreshInterval', async (event, intervalMs: number) => {
+  if (typeof intervalMs === 'number' && intervalMs > 0) {
+    // Mettre à jour l'intervalle de rafraîchissement
+    systemRefreshInterval = intervalMs;
+    // Mettre à jour la validité du cache (moitié de l'intervalle, minimum 100ms)
+    systemInfoCacheValidity = Math.max(100, Math.floor(intervalMs / 2));
+    
+    // Informer ohmReader.ts du nouvel intervalle
+    try {
+      const { startBackgroundRefresh } = await import('./ohmReader');
+      if (typeof startBackgroundRefresh === 'function') {
+        startBackgroundRefresh(systemRefreshInterval);
+        console.log(`Intervalle de rafraîchissement système configuré à ${systemRefreshInterval}ms`);
+      }
+    } catch (e) {
+      console.error('Erreur lors de la configuration de l\'intervalle de rafraîchissement:', e);
+    }
+    
+    return { success: true, interval: systemRefreshInterval };
+  }
+  return { success: false, message: 'Intervalle invalide' };
 });
 
 registerIpcHandler('spotify:getTrackInfo', async () => {
@@ -201,11 +228,50 @@ registerIpcHandler('serial:connect', async (event: IpcMainInvokeEvent, portPath:
     parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
     // Gestion des erreurs
-    port.on('error', (err: Error) => {
-      console.error('Serial port error:', err);
+    const handleError = (err: Error, context: string = '') => {
+      const errorMessage = `[ERROR] ${context}${context ? ': ' : ''}${err.message}`;
+      console.error(errorMessage);
+      
       if (mainWindow) {
-        mainWindow.webContents.send('serial:data', `[ERROR] ${err.message}`);
+        // Envoyer l'erreur au format structuré
+        mainWindow.webContents.send('serial:error', {
+          type: 'port_error',
+          message: err.message,
+          port: portPath,
+          context
+        });
+        
+        // Également envoyer dans les logs normaux pour rétrocompatibilité
+        mainWindow.webContents.send('serial:data', errorMessage);
       }
+      
+      // Si le port est en erreur, le marquer comme déconnecté
+      if (port?.isOpen) {
+        port.close((closeErr) => {
+          if (closeErr) {
+            console.error('Error while closing port after error:', closeErr);
+          }
+          port = null;
+        });
+      } else {
+        port = null;
+      }
+    };
+    
+    // Gestion des erreurs du port
+    port.on('error', (err: Error) => handleError(err, 'Serial port error'));
+    
+    // Gestion de la fermeture inattendue
+    port.on('close', () => {
+      console.log('Port was closed unexpectedly');
+      if (mainWindow) {
+        mainWindow.webContents.send('serial:error', {
+          type: 'port_closed',
+          message: 'The serial port was closed unexpectedly',
+          port: portPath
+        });
+      }
+      port = null;
     });
 
     // Gestion des données reçues

@@ -8,6 +8,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   disconnectFromPort: () => ipcRenderer.invoke('serial:disconnect'),
   sendToPort: (data) => ipcRenderer.invoke('serial:send', data),
   
+  // Écouteurs d'événements série
+  onSerialData: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('serial:data', listener);
+    return () => ipcRenderer.off('serial:data', listener);
+  },
+  onSerialError: (callback) => {
+    const listener = (_, error) => callback(error);
+    ipcRenderer.on('serial:error', listener);
+    return () => ipcRenderer.off('serial:error', listener);
+  },
+  
   // System information methods
   getCpuInfo: () => ipcRenderer.invoke('system:getCpuInfo'),
   getGpuInfo: () => ipcRenderer.invoke('system:getGpuInfo'),

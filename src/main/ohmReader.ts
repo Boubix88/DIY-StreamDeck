@@ -96,7 +96,11 @@ export async function getSystemInfo() {
 // Démarrer un rafraîchissement en arrière-plan
 let refreshInterval: NodeJS.Timeout;
 
-function startBackgroundRefresh(intervalMs = 3000) {
+/**
+ * Configure l'intervalle de rafraîchissement des données système en arrière-plan
+ * @param intervalMs Intervalle en millisecondes (défaut: 3000ms)
+ */
+export function startBackgroundRefresh(intervalMs = 3000) {
   if (refreshInterval) clearInterval(refreshInterval);
   
   // Premier appel immédiat
@@ -106,7 +110,9 @@ function startBackgroundRefresh(intervalMs = 3000) {
   refreshInterval = setInterval(() => {
     readOhmBridgeAsync().catch(console.error);
   }, intervalMs);
+  
+  console.log(`OhmReader: intervalle de rafraîchissement configuré à ${intervalMs}ms`);
 }
 
-// Démarrer le rafraîchissement au chargement du module
+// Démarrer le rafraîchissement au chargement du module avec intervalle par défaut
 startBackgroundRefresh();

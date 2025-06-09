@@ -63,6 +63,21 @@ const useSystemInfo = (timeInterval: number): UseSystemInfoReturn => {
     }
   }, [fetchAllSystemInfo, isLoading]);
 
+  // Synchroniser l'intervalle de rafraîchissement avec le backend
+  useEffect(() => {
+    // Informer le backend de l'intervalle de rafraîchissement
+    const syncBackendInterval = async () => {
+      try {
+        await window.electronAPI.invoke('system:setRefreshInterval', timeInterval);
+        console.log(`Intervalle de rafraîchissement système configuré à ${timeInterval}ms`);
+      } catch (error) {
+        console.error('Erreur lors de la configuration de l\'intervalle:', error);
+      }
+    };
+    
+    syncBackendInterval();
+  }, [timeInterval]); // Se déclenche uniquement quand timeInterval change
+  
   // Mettre à jour les informations périodiquement
   useEffect(() => {
     // Première récupération
@@ -76,12 +91,10 @@ const useSystemInfo = (timeInterval: number): UseSystemInfoReturn => {
     update(); // Appel initial
 
     // Mettre à jour à l'intervalle spécifié (en millisecondes)
-    //console.log(`Démarrage de la mise à jour des infos système avec un intervalle de ${timeInterval}ms`);
     const interval = setInterval(updateAllInfo, timeInterval);
 
     // Nettoyer l'intervalle lors du démontage du composant
     return () => {
-      //console.log('Nettoyage de l\'intervalle de mise à jour système');
       clearInterval(interval);
     };
   }, [updateAllInfo, timeInterval]); // Ajout de timeInterval dans les dépendances

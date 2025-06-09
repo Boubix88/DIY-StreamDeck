@@ -47,6 +47,48 @@ body {
   animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Animation de scan pour les barres de progression */
+@keyframes scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-scan {
+  animation: scan 2s ease-in-out infinite;
+}
+
+/* Animation de scan inverse pour les barres de progression */
+@keyframes scan-reverse {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-scan-reverse {
+  animation: scan-reverse 2s ease-in-out infinite;
+}
+
+/* Animation de rotation pour les jauges circulaires */
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-rotate {
+  animation: rotate 10s linear infinite;
+}
+
 /* Transitions */
 .transition-all {
   transition: all 0.2s ease-in-out;
